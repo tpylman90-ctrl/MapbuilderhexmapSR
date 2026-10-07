@@ -216,62 +216,92 @@ func _append_organic_cliff_face(surface: SurfaceTool, cell: Vector2i, edge: int,
 	var bottom_y := low_level * STEP_HEIGHT + CAP_HEIGHT * 0.5
 	var top_y := high_level * STEP_HEIGHT + CAP_HEIGHT * 0.5
 	var wall_height := top_y - bottom_y
+	var edge_length := edge_a.distance_to(edge_b)
 
 	# Seed each edge from its cell so sculpting and undo rebuild the same rock.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(cell.x * 73856093) ^ int(cell.y * 19349663) ^ int(edge * 83492791)
-	var horizontal_segments := 3
-	var vertical_segments := clampi(ceili(wall_height / 0.9), 2, 10)
-	var points: Array = []
-	for vertical in range(vertical_segments + 1):
-		var row_points: Array[Vector3] = []
-		var row_ratio := float(vertical) / vertical_segments
-		var row_y := lerpf(bottom_y, top_y, row_ratio)
-		for horizontal in range(horizontal_segments + 1):
-			var t := float(horizontal) / horizontal_segments
-			var boundary := horizontal == 0 or horizontal == horizontal_segments
-			if not boundary:
-				t = clampf(t + rng.randf_range(-0.055, 0.055), 0.0, 1.0)
-			var point := edge_a.lerp(edge_b, t)
-			if not boundary:
-				point += outward * rng.randf_range(0.015, 0.19)
-			point.y = row_y
-			if not boundary and vertical > 0 and vertical < vertical_segments:
-				point.y += rng.randf_range(-0.11, 0.11)
-			elif not boundary and vertical == vertical_segments:
-				# Broken stone teeth peek through the grass line along the rim.
-				point.y += rng.randf_range(-0.025, 0.13)
-			row_points.append(point)
-		points.append(row_points)
+	# Dark backing remains visible in the narrow seams between the larger broken
+	# rock plates. This avoids the regular, small diamond pattern of the old grid.
+	var backing_depth := outward * 0.035
+	var base_a := edge_a + backing_depth
+	var base_b := edge_b + backing_depth
+	var top_a := base_a
+	var top_b := base_b
+	base_a.y = bottom_y
+	base_b.y = bottom_y
+	top_a.y = top_y
+	top_b.y = top_y
+	_add_triangle(surface, base_a, top_a, top_b, Color("353832"))
+	_add_triangle(surface, base_a, top_b, base_b, Color("292c27"))
 
 	var rock_colors: Array[Color] = [
-		Color("55564f"), Color("66665d"), Color("777265"),
-		Color("484941"), Color("858070"), Color("5c5a50")
+		Color("51534d"), Color("66675f"), Color("77766c"),
+		Color("464942"), Color("898477"), Color("5b5b53"),
+		Color("706e64"), Color("4c5049")
 	]
-	for vertical in range(vertical_segments):
-		for horizontal in range(horizontal_segments):
-			var p00: Vector3 = points[vertical][horizontal]
-			var p01: Vector3 = points[vertical][horizontal + 1]
-			var p10: Vector3 = points[vertical + 1][horizontal]
-			var p11: Vector3 = points[vertical + 1][horizontal + 1]
-			var rock: Color = rock_colors[rng.randi_range(0, rock_colors.size() - 1)]
-			if rng.randf() < 0.5:
-				_add_triangle(surface, p00, p10, p11, rock)
-				_add_triangle(surface, p00, p11, p01, rock.darkened(rng.randf_range(0.02, 0.12)))
-			else:
-				_add_triangle(surface, p00, p10, p01, rock.lightened(rng.randf_range(0.01, 0.08)))
-				_add_triangle(surface, p10, p11, p01, rock.darkened(rng.randf_range(0.03, 0.13)))
+	# Broad irregular plates read as fractured rock columns. The small number of
+	# large pieces keeps the silhouette legible and the mesh light on Android.
+	var rows := clampi(ceili(wall_height / 0.72), 1, 18)
+	for row in range(rows):
+		var row_low := bottom_y + wall_height * float(row) / rows
+		var row_high := bottom_y + wall_height * float(row + 1) / rows
+		var row_center := (row_low + row_high) * 0.5
+		var row_height := row_high - row_low
+		var plates_in_row := 2 if rng.randf() < 0.78 else 3
+		for plate_index in range(plates_in_row):
+			var t_center := (float(plate_index) + 0.5) / plates_in_row
+			t_center = clampf(t_center + rng.randf_range(-0.13, 0.13), 0.12, 0.88)
+			var t_radius := rng.randf_range(0.12, 0.27) if plates_in_row == 2 else rng.randf_range(0.09, 0.20)
+			var y_radius := row_height * rng.randf_range(0.34, 0.62)
+			var plate_center := edge_a.lerp(edge_b, t_center)
+			plate_center.y = row_center + rng.randf_range(-row_height * 0.12, row_height * 0.12)
+			plate_center += outward * rng.randf_range(0.075, 0.16)
+			var point_count := rng.randi_range(5, 7)
+			var plate_points: Array[Vector3] = []
+			var phase := rng.randf_range(-0.2, 0.2)
+			for point_index in range(point_count):
+				var angle := phase + TAU * float(point_index) / point_count
+				var irregularity := rng.randf_range(0.72, 1.22)
+				var point_t := clampf(t_center + cos(angle) * t_radius * irregularity, 0.015, 0.985)
+				var point_y := clampf(plate_center.y + sin(angle) * y_radius * irregularity, bottom_y + 0.015, top_y + 0.035)
+				var point := edge_a.lerp(edge_b, point_t)
+				point.y = point_y
+				point += outward * rng.randf_range(0.07, 0.22)
+				plate_points.append(point)
+			for point_index in range(point_count):
+				var next_index := (point_index + 1) % point_count
+				var facet_color: Color = rock_colors[rng.randi_range(0, rock_colors.size() - 1)]
+				if sin(phase + TAU * float(point_index) / point_count) > 0.35 and row == rows - 1:
+					# Warm gray highlights at the lip catch the light beneath the grass cap.
+					facet_color = facet_color.lightened(0.12)
+				_add_triangle(surface, plate_center + outward * 0.04, plate_points[point_index], plate_points[next_index], facet_color)
 
-	# A few tapered fissures break up the broad faces without making a tiled pattern.
-	var fissure_count := clampi(ceili(wall_height / 1.8), 1, 4)
+	# Moss stays sparse and close to the upper ledge, like growth in the rock seams.
+	var moss_colors: Array[Color] = [Color("4d6038"), Color("687748"), Color("78834d")]
+	var moss_count := clampi(ceili(edge_length * wall_height / 1.3), 1, 3)
+	for moss_index in range(moss_count):
+		var moss_t := rng.randf_range(0.12, 0.88)
+		var moss_width := rng.randf_range(0.035, 0.085)
+		var moss_y := top_y - rng.randf_range(0.04, minf(0.22, wall_height * 0.32))
+		var moss_a := edge_a.lerp(edge_b, moss_t - moss_width) + outward * 0.28
+		var moss_b := edge_a.lerp(edge_b, moss_t + moss_width) + outward * 0.28
+		var moss_tip := edge_a.lerp(edge_b, moss_t + rng.randf_range(-0.025, 0.025)) + outward * 0.29
+		moss_a.y = moss_y
+		moss_b.y = moss_y + rng.randf_range(-0.025, 0.025)
+		moss_tip.y = minf(top_y + 0.02, moss_y + rng.randf_range(0.05, 0.13))
+		_add_triangle(surface, moss_a, moss_b, moss_tip, moss_colors[rng.randi_range(0, moss_colors.size() - 1)])
+
+	# Tapered dark cracks cross the plates at irregular intervals.
+	var fissure_count := clampi(ceili(wall_height / 2.0), 1, 4)
 	for fissure in range(fissure_count):
 		var t_center := rng.randf_range(0.16, 0.84)
-		var crack_length := minf(rng.randf_range(0.28, 0.78), wall_height * 0.82)
+		var crack_length := minf(rng.randf_range(0.32, 0.92), wall_height * 0.82)
 		var crack_bottom := rng.randf_range(bottom_y, maxf(bottom_y, top_y - crack_length))
 		var crack_top := crack_bottom + crack_length
 		var drift := rng.randf_range(-0.055, 0.055)
-		var crack_width := rng.randf_range(0.018, 0.042)
-		var depth := outward * 0.22
+		var crack_width := rng.randf_range(0.014, 0.032)
+		var depth := outward * 0.34
 		var left_bottom := edge_a.lerp(edge_b, t_center - crack_width) + depth
 		var right_bottom := edge_a.lerp(edge_b, t_center + crack_width) + depth
 		var left_top := edge_a.lerp(edge_b, t_center + drift - crack_width * 0.35) + depth
