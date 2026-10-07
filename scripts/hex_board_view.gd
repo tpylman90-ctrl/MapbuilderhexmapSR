@@ -2,7 +2,7 @@ class_name HexBoardView
 extends Node3D
 
 const CAP_HEIGHT: float = 0.18
-const EDGE_RADIUS: float = HexGrid.HEX_RADIUS
+const EDGE_RADIUS: float = HexGrid.HEX_RADIUS * 0.99
 const STEP_HEIGHT: float = HexGrid.HEIGHT_PER_LEVEL
 const SELECT_COLOR := Color("efcf78")
 
@@ -49,18 +49,12 @@ func _make_hex_mesh() -> ArrayMesh:
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var top_y := CAP_HEIGHT * 0.5
-	var bottom_y := -CAP_HEIGHT * 0.5
 	for edge in range(6):
 		var angle_a := deg_to_rad(30.0 + 60.0 * edge)
 		var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
 		var top_a := Vector3(cos(angle_a) * EDGE_RADIUS, top_y, sin(angle_a) * EDGE_RADIUS)
 		var top_b := Vector3(cos(angle_b) * EDGE_RADIUS, top_y, sin(angle_b) * EDGE_RADIUS)
-		var bottom_a := Vector3(top_a.x, bottom_y, top_a.z)
-		var bottom_b := Vector3(top_b.x, bottom_y, top_b.z)
 		_add_triangle(surface, Vector3(0.0, top_y, 0.0), top_b, top_a, Color.WHITE)
-		_add_triangle(surface, bottom_a, Vector3(0.0, bottom_y, 0.0), bottom_b, Color.WHITE)
-		_add_triangle(surface, bottom_a, Vector3(top_a.x, top_y, top_a.z), Vector3(top_b.x, top_y, top_b.z), Color.WHITE)
-		_add_triangle(surface, bottom_a, Vector3(top_b.x, top_y, top_b.z), bottom_b, Color.WHITE)
 	surface.generate_normals()
 	return surface.commit()
 
@@ -76,6 +70,7 @@ func _build_tile_mesh() -> void:
 	grid_node.multimesh = tile_instances
 	var material := StandardMaterial3D.new()
 	material.vertex_color_use_as_albedo = true
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.roughness = 0.95
 	grid_node.material_override = material
 	add_child(grid_node)
@@ -136,13 +131,23 @@ func _rebuild_cliffs() -> void:
 	for row in range(HexGrid.ROWS):
 		for column in range(HexGrid.COLUMNS):
 			var cell := Vector2i(column, row)
-			var high_level := data.elevation_at(cell)
+			var cell_level := data.elevation_at(cell)
 			var center := data.world_center(cell)
 			for edge in range(6):
 				var neighbor := data.neighbor_for_edge(cell, edge)
-				var low_level := data.elevation_at(neighbor) if data.contains(neighbor) else 0
-				if high_level <= low_level:
-					continue
+				var high_level: int
+				var low_level: int
+				if data.contains(neighbor):
+					var neighbor_level := data.elevation_at(neighbor)
+					if cell_level <= neighbor_level:
+						continue
+					high_level = cell_level
+					low_level = neighbor_level
+				else:
+					if cell_level == 0:
+						continue
+					high_level = maxi(cell_level, 0)
+					low_level = mini(cell_level, 0)
 				var angle_a := deg_to_rad(30.0 + 60.0 * edge)
 				var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
 				var a := Vector3(center.x + cos(angle_a) * EDGE_RADIUS, 0.0, center.z + sin(angle_a) * EDGE_RADIUS)

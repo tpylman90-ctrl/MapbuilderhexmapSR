@@ -8,15 +8,19 @@ const MIN_ELEVATION: int = -15
 const HEIGHT_PER_LEVEL: float = 0.75
 const HEX_RADIUS: float = 1.0
 
-enum Terrain { GRASS, DIRT, STONE, WATER }
+enum Terrain { GRASS, DIRT, STONE, WATER, SAND, SNOW, MUD, ROAD }
 
 const TERRAIN_COLORS: Array[Color] = [
-	Color("7d9859"),
-	Color("94704c"),
-	Color("92918a"),
-	Color("477e9d")
+	Color("83ad55"),
+	Color("a47a4e"),
+	Color("969890"),
+	Color("398eb3"),
+	Color("d0b46f"),
+	Color("d8e1e6"),
+	Color("686957"),
+	Color("886a50")
 ]
-const TERRAIN_NAMES: Array[String] = ["Grass", "Dirt", "Stone", "Water"]
+const TERRAIN_NAMES: Array[String] = ["Grass", "Dirt", "Stone", "Water", "Sand", "Snow", "Mud", "Road"]
 const EDGE_AXIAL_DIRECTIONS: Array[Vector2i] = [
 	Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-1, 0),
 	Vector2i(0, -1), Vector2i(1, -1), Vector2i(1, 0)
@@ -52,7 +56,7 @@ func set_elevation(cell: Vector2i, level: int) -> void:
 
 func set_terrain(cell: Vector2i, terrain: int) -> void:
 	if contains(cell):
-		terrain_ids[index_of(cell)] = clampi(terrain, Terrain.GRASS, Terrain.WATER)
+		terrain_ids[index_of(cell)] = clampi(terrain, Terrain.GRASS, Terrain.ROAD)
 
 func world_center(cell: Vector2i) -> Vector3:
 	var row_offset := 0.5 if cell.y % 2 == 1 else 0.0
@@ -81,6 +85,38 @@ func brush_cells(center: Vector2i, brush_size: int) -> Array[Vector2i]:
 			var hex_distance := maxi(absi(dq), maxi(absi(dr), absi(dq + dr)))
 			if hex_distance <= radius:
 				result.append(cell)
+	return result
+
+func line_cells(from_cell: Vector2i, to_cell: Vector2i) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	if not contains(from_cell) or not contains(to_cell):
+		return result
+	var from_axial := axial_coordinates(from_cell)
+	var to_axial := axial_coordinates(to_cell)
+	var distance := maxi(absi(to_axial.x - from_axial.x), maxi(absi(to_axial.y - from_axial.y), absi((to_axial.x + to_axial.y) - (from_axial.x + from_axial.y))))
+	if distance == 0:
+		result.append(from_cell)
+		return result
+	for step in range(distance + 1):
+		var weight := float(step) / distance
+		var q_float := lerpf(from_axial.x, to_axial.x, weight)
+		var r_float := lerpf(from_axial.y, to_axial.y, weight)
+		var s_float := lerpf(-from_axial.x - from_axial.y, -to_axial.x - to_axial.y, weight)
+		var q := roundi(q_float)
+		var r := roundi(r_float)
+		var s := roundi(s_float)
+		var q_error := absf(q_float - q)
+		var r_error := absf(r_float - r)
+		var s_error := absf(s_float - s)
+		if q_error > r_error and q_error > s_error:
+			q = -r - s
+		elif r_error > s_error:
+			r = -q - s
+		var row := r
+		var column := q + floori(float(row) * 0.5)
+		var cell := Vector2i(column, row)
+		if contains(cell) and (result.is_empty() or result.back() != cell):
+			result.append(cell)
 	return result
 
 func world_to_cell(world_x: float, world_z: float) -> Vector2i:

@@ -4,9 +4,9 @@ Standalone Godot 4.7 project for a mobile-friendly hex map builder. It opens on 
 
 ## Open in Godot
 
-Open the repository root in Godot 4.7. Tap or drag across the board to edit. Raise and Lower change elevation by one step, with limits of +15 and −15. Choose a ground type to paint, then use the brush-size picker to change the affected area. Undo and Redo apply to whole strokes. Turn on Pan view to drag the camera; the − and + buttons zoom. The initial flat grid uses a plain color for clear cell visibility before art assets are added.
+Open the repository root in Godot 4.7. The Sculpt panel provides Raise, Lower, Flatten, Smooth, Hill, and Ridge tools; brush sizes range from 1 to 8 hexes, and elevation is limited to +15 and −15. The Ground panel paints Grass, Dirt, Stone, Water, Sand, Snow, Mud, and Road. Sample picks an existing ground type, while Fill board paints the whole ground layer after confirmation. Undo and Redo apply to whole strokes or a layer fill. Turn on Pan view to drag the camera; the − and + buttons zoom. The initial flat grid uses clear plain colors before art assets are added.
 
-The hexes use pointy-top geometry aligned to the offset-row grid. Each cell stores elevation and ground type independently. Elevated edges generate faceted rock faces between cells. Objects, textures, save/load, and export of authored maps are not part of this first editing pass.
+The hexes use pointy-top geometry aligned to the offset-row grid. Thin gaps define the cell edges without overlapping side faces. Each cell stores elevation and ground type independently; elevated edges generate faceted rock faces between cells. Objects, textures, save/load, and export of authored maps are not part of this terrain editing pass.
 
 ## Layout
 
