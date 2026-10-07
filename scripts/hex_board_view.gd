@@ -170,12 +170,11 @@ func _rebuild_cliffs() -> void:
 		cliff_node = null
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var face_count := 0
+	var cliff_count := 0
 	for row in range(HexGrid.ROWS):
 		for column in range(HexGrid.COLUMNS):
 			var cell := Vector2i(column, row)
 			var cell_level := data.elevation_at(cell)
-			var center := data.world_center(cell)
 			for edge in range(6):
 				var neighbor := data.neighbor_for_edge(cell, edge)
 				var high_level: int
@@ -191,33 +190,9 @@ func _rebuild_cliffs() -> void:
 						continue
 					high_level = maxi(cell_level, 0)
 					low_level = mini(cell_level, 0)
-				var angle_a := deg_to_rad(30.0 + 60.0 * edge)
-				var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
-				var a := Vector3(center.x + cos(angle_a) * EDGE_RADIUS, 0.0, center.z + sin(angle_a) * EDGE_RADIUS)
-				var b := Vector3(center.x + cos(angle_b) * EDGE_RADIUS, 0.0, center.z + sin(angle_b) * EDGE_RADIUS)
-				var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
-				var outward := Vector3(cos(middle_angle), 0.0, sin(middle_angle))
-				var top_y := high_level * STEP_HEIGHT + CAP_HEIGHT * 0.5
-				var bottom_y := low_level * STEP_HEIGHT + CAP_HEIGHT * 0.5
-				var bands := high_level - low_level
-				for band in range(bands):
-					var t0 := float(band) / bands
-					var t1 := float(band + 1) / bands
-					var y0 := lerpf(bottom_y, top_y, t0)
-					var y1 := lerpf(bottom_y, top_y, t1)
-					var p0 := Vector3(a.x, y0, a.z)
-					var p1 := Vector3(b.x, y0, b.z)
-					var p2 := Vector3(b.x, y1, b.z)
-					var p3 := Vector3(a.x, y1, a.z)
-					var bulge := 0.045 + 0.018 * float((row * 13 + column * 7 + edge * 3 + band) % 4)
-					var facet_center := (p0 + p1 + p2 + p3) * 0.25 + outward * bulge
-					var rock := Color("575951") if (row + column + edge + band) % 2 == 0 else Color("69685f")
-					_add_triangle(surface, p0, p1, facet_center, rock)
-					_add_triangle(surface, p1, p2, facet_center, rock.lightened(0.05))
-					_add_triangle(surface, p2, p3, facet_center, rock.darkened(0.08))
-					_add_triangle(surface, p3, p0, facet_center, rock.darkened(0.04))
-					face_count += 1
-	if face_count == 0:
+				_append_organic_cliff_face(surface, cell, edge, low_level, high_level)
+				cliff_count += 1
+	if cliff_count == 0:
 		return
 	surface.generate_normals()
 	cliff_node = MeshInstance3D.new()
@@ -229,6 +204,84 @@ func _rebuild_cliffs() -> void:
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	cliff_node.material_override = material
 	add_child(cliff_node)
+
+func _append_organic_cliff_face(surface: SurfaceTool, cell: Vector2i, edge: int, low_level: int, high_level: int) -> void:
+	var center := data.world_center(cell)
+	var angle_a := deg_to_rad(30.0 + 60.0 * edge)
+	var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
+	var edge_a := Vector3(center.x + cos(angle_a) * EDGE_RADIUS, 0.0, center.z + sin(angle_a) * EDGE_RADIUS)
+	var edge_b := Vector3(center.x + cos(angle_b) * EDGE_RADIUS, 0.0, center.z + sin(angle_b) * EDGE_RADIUS)
+	var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
+	var outward := Vector3(cos(middle_angle), 0.0, sin(middle_angle))
+	var bottom_y := low_level * STEP_HEIGHT + CAP_HEIGHT * 0.5
+	var top_y := high_level * STEP_HEIGHT + CAP_HEIGHT * 0.5
+	var wall_height := top_y - bottom_y
+
+	# Seed each edge from its cell so sculpting and undo rebuild the same rock.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(cell.x * 73856093) ^ int(cell.y * 19349663) ^ int(edge * 83492791)
+	var horizontal_segments := 3
+	var vertical_segments := clampi(ceili(wall_height / 0.9), 2, 10)
+	var points: Array = []
+	for vertical in range(vertical_segments + 1):
+		var row_points: Array[Vector3] = []
+		var row_ratio := float(vertical) / vertical_segments
+		var row_y := lerpf(bottom_y, top_y, row_ratio)
+		for horizontal in range(horizontal_segments + 1):
+			var t := float(horizontal) / horizontal_segments
+			var boundary := horizontal == 0 or horizontal == horizontal_segments
+			if not boundary:
+				t = clampf(t + rng.randf_range(-0.055, 0.055), 0.0, 1.0)
+			var point := edge_a.lerp(edge_b, t)
+			if not boundary:
+				point += outward * rng.randf_range(0.015, 0.19)
+			point.y = row_y
+			if not boundary and vertical > 0 and vertical < vertical_segments:
+				point.y += rng.randf_range(-0.11, 0.11)
+			elif not boundary and vertical == vertical_segments:
+				# Broken stone teeth peek through the grass line along the rim.
+				point.y += rng.randf_range(-0.025, 0.13)
+			row_points.append(point)
+		points.append(row_points)
+
+	var rock_colors: Array[Color] = [
+		Color("55564f"), Color("66665d"), Color("777265"),
+		Color("484941"), Color("858070"), Color("5c5a50")
+	]
+	for vertical in range(vertical_segments):
+		for horizontal in range(horizontal_segments):
+			var p00: Vector3 = points[vertical][horizontal]
+			var p01: Vector3 = points[vertical][horizontal + 1]
+			var p10: Vector3 = points[vertical + 1][horizontal]
+			var p11: Vector3 = points[vertical + 1][horizontal + 1]
+			var rock: Color = rock_colors[rng.randi_range(0, rock_colors.size() - 1)]
+			if rng.randf() < 0.5:
+				_add_triangle(surface, p00, p10, p11, rock)
+				_add_triangle(surface, p00, p11, p01, rock.darkened(rng.randf_range(0.02, 0.12)))
+			else:
+				_add_triangle(surface, p00, p10, p01, rock.lightened(rng.randf_range(0.01, 0.08)))
+				_add_triangle(surface, p10, p11, p01, rock.darkened(rng.randf_range(0.03, 0.13)))
+
+	# A few tapered fissures break up the broad faces without making a tiled pattern.
+	var fissure_count := clampi(ceili(wall_height / 1.8), 1, 4)
+	for fissure in range(fissure_count):
+		var t_center := rng.randf_range(0.16, 0.84)
+		var crack_length := minf(rng.randf_range(0.28, 0.78), wall_height * 0.82)
+		var crack_bottom := rng.randf_range(bottom_y, maxf(bottom_y, top_y - crack_length))
+		var crack_top := crack_bottom + crack_length
+		var drift := rng.randf_range(-0.055, 0.055)
+		var crack_width := rng.randf_range(0.018, 0.042)
+		var depth := outward * 0.22
+		var left_bottom := edge_a.lerp(edge_b, t_center - crack_width) + depth
+		var right_bottom := edge_a.lerp(edge_b, t_center + crack_width) + depth
+		var left_top := edge_a.lerp(edge_b, t_center + drift - crack_width * 0.35) + depth
+		var right_top := edge_a.lerp(edge_b, t_center + drift + crack_width * 0.35) + depth
+		left_bottom.y = crack_bottom
+		right_bottom.y = crack_bottom
+		left_top.y = crack_top
+		right_top.y = crack_top
+		_add_triangle(surface, left_bottom, right_bottom, left_top, Color("30312c"))
+		_add_triangle(surface, right_bottom, right_top, left_top, Color("282923"))
 
 func refresh_cliffs() -> void:
 	_rebuild_cliffs()
