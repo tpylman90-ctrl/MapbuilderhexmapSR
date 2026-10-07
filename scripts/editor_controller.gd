@@ -373,12 +373,14 @@ func _apply_brush_at(center: Vector2i) -> void:
 			_apply_cell(cell, grid.elevation_at(cell) + rise, grid.terrain_at(cell))
 		return
 	if elevation_tool == ElevationTool.RIDGE:
-		for cell in cells:
-			_apply_cell(cell, grid.elevation_at(cell) + 2, grid.terrain_at(cell))
-			for edge in range(6):
-				var neighbor := grid.neighbor_for_edge(cell, edge)
-				if grid.contains(neighbor):
-					_apply_cell(neighbor, grid.elevation_at(neighbor) + 1, grid.terrain_at(neighbor))
+		_apply_cell(center, grid.elevation_at(center) + 2, grid.terrain_at(center))
+		for support_cell in cells:
+			if support_cell != center:
+				_apply_cell(support_cell, grid.elevation_at(support_cell) + 1, grid.terrain_at(support_cell))
+		for edge in range(6):
+			var neighbor := grid.neighbor_for_edge(center, edge)
+			if grid.contains(neighbor):
+				_apply_cell(neighbor, grid.elevation_at(neighbor) + 1, grid.terrain_at(neighbor))
 		return
 	for cell in cells:
 		var next_level := _flatten_level if elevation_tool == ElevationTool.FLATTEN else grid.elevation_at(cell) + elevation_delta
@@ -404,7 +406,7 @@ func _apply_cell(cell: Vector2i, next_elevation: int, next_terrain: int) -> void
 func _commit_undo(change_set: Dictionary) -> void:
 	_undo_history.append(change_set.duplicate(true))
 	_redo_history.clear()
-	if _undo_history.size() > 100:
+	if _undo_history.size() > 20:
 		_undo_history.pop_front()
 	undo_button.disabled = _undo_history.is_empty()
 	redo_button.disabled = true
