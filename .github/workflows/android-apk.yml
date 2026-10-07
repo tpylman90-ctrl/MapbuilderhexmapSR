@@ -1,0 +1,166 @@
+name: Build MapbuilderhexmapSR Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "project.godot"
+      - "export_presets.cfg"
+      - "scenes/**"
+      - "scripts/**"
+      - "assets/**"
+      - ".github/workflows/android-apk.yml"
+  pull_request:
+    paths:
+      - "project.godot"
+      - "export_presets.cfg"
+      - "scenes/**"
+      - "scripts/**"
+      - "assets/**"
+      - ".github/workflows/android-apk.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mapbuilder-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    name: Validate Godot and build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download Godot 4.7.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/godot"
+          cd "$RUNNER_TEMP/godot"
+          curl -L --fail --retry 3 -o godot.zip "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          GODOT_BIN="$(find . -maxdepth 1 -type f -name 'Godot_v4.7.2-stable_linux.x86_64*' | head -n 1)"
+          test -n "$GODOT_BIN"
+          chmod +x "$GODOT_BIN"
+          echo "GODOT_BIN=$RUNNER_TEMP/godot/$GODOT_BIN" >> "$GITHUB_ENV"
+
+      - name: Validate project import and scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          "$GODOT_BIN" --headless --path "$GITHUB_WORKSPACE" --editor --quit 2>&1 | tee "$RUNNER_TEMP/godot-validation.log"
+          GODOT_EXIT=${PIPESTATUS[0]}
+          set -e
+          if grep -E "SCRIPT ERROR:|Parse Error:|Failed to load script" "$RUNNER_TEMP/godot-validation.log"; then
+            echo "Godot project validation reported an error."
+            exit 1
+          fi
+          if [ "$GODOT_EXIT" -ne 0 ]; then
+            echo "Godot validation exited with code $GODOT_EXIT."
+            exit "$GODOT_EXIT"
+          fi
+
+      - name: Smoke test main scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          timeout 90 "$GODOT_BIN" --headless --path "$GITHUB_WORKSPACE" --scene "res://scenes/main.tscn" --quit-after 3 2>&1 | tee "$RUNNER_TEMP/godot-scene-smoke.log"
+          GODOT_EXIT=${PIPESTATUS[0]}
+          set -e
+          if grep -E "SCRIPT ERROR:|Parse Error:|Failed to load script" "$RUNNER_TEMP/godot-scene-smoke.log"; then
+            echo "Main scene smoke test reported an error."
+            exit 1
+          fi
+          if [ "$GODOT_EXIT" -ne 0 ]; then
+            echo "Main scene smoke test exited with code $GODOT_EXIT."
+            exit "$GODOT_EXIT"
+          fi
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "build-tools;36.0.0" \
+            "platforms;android-36"
+
+      - name: Check signing secrets
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+
+      - name: Set monotonic Android version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_CODE=$(date +%s)
+          VERSION_NAME="0.1.${GITHUB_RUN_NUMBER}"
+          sed -i "s/version\/code=.*/version\/code=$VERSION_CODE/" export_presets.cfg
+          sed -i "s/version\/name=.*/version\/name=\"$VERSION_NAME\"/" export_presets.cfg
+          echo "Building version $VERSION_NAME ($VERSION_CODE)"
+
+      - name: Prepare permanent release signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mapbuilder-signing"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/mapbuilder-signing/mapbuilder-release.keystore"
+          chmod 600 "$RUNNER_TEMP/mapbuilder-signing/mapbuilder-release.keystore"
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$RUNNER_TEMP/mapbuilder-signing/mapbuilder-release.keystore" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Export permanently signed release APK
+        uses: firebelley/godot-export@v8.0.0
+        with:
+          godot_executable_download_url: https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          godot_export_templates_download_url: https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
+          relative_project_path: .
+          presets_to_export: "Android APK"
+          export_debug: false
+          cache: true
+          verbose: true
+          use_preset_export_path: true
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MapbuilderhexmapSR-Android
+          path: build/MapbuilderhexmapSR.apk
+          if-no-files-found: error
+          retention-days: 1

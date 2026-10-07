@@ -1,0 +1,25 @@
+# Godot generated files
+.godot/
+*.translation
+
+# Exported builds
+/build/
+/dist/
+*.apk
+*.aab
+*.pck
+
+# Signing credentials and local secrets
+*.keystore
+*.jks
+*.p12
+.env
+*.secret
+*_secrets*
+*_credentials*
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
