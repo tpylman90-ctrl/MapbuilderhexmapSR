@@ -12,6 +12,7 @@ var grid_node: MultiMeshInstance3D
 var outline_instances: MultiMesh
 var outline_node: MultiMeshInstance3D
 var cliff_node: MeshInstance3D
+var ledge_node: MeshInstance3D
 var selection_node: MeshInstance3D
 var selected_cell := Vector2i(-1, -1)
 
@@ -94,11 +95,8 @@ func _build_tile_mesh() -> void:
 	grid_node = MultiMeshInstance3D.new()
 	grid_node.name = "HexGrid64x128"
 	grid_node.multimesh = tile_instances
-	var material := StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.roughness = 0.95
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var material := ShaderMaterial.new()
+	material.shader = load("res://assets/materials/terrain_surface.gdshader") as Shader
 	grid_node.material_override = material
 	add_child(grid_node)
 
@@ -168,8 +166,13 @@ func _rebuild_cliffs() -> void:
 	if cliff_node != null:
 		cliff_node.queue_free()
 		cliff_node = null
+	if ledge_node != null:
+		ledge_node.queue_free()
+		ledge_node = null
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var ledge_surface := SurfaceTool.new()
+	ledge_surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var cliff_count := 0
 	for row in range(HexGrid.ROWS):
 		for column in range(HexGrid.COLUMNS):
@@ -190,7 +193,7 @@ func _rebuild_cliffs() -> void:
 						continue
 					high_level = maxi(cell_level, 0)
 					low_level = mini(cell_level, 0)
-				_append_organic_cliff_face(surface, cell, edge, low_level, high_level)
+				_append_organic_cliff_face(surface, ledge_surface, cell, edge, low_level, high_level)
 				cliff_count += 1
 	if cliff_count == 0:
 		return
@@ -203,7 +206,16 @@ func _rebuild_cliffs() -> void:
 	cliff_node.material_override = material
 	add_child(cliff_node)
 
-func _append_organic_cliff_face(surface: SurfaceTool, cell: Vector2i, edge: int, low_level: int, high_level: int) -> void:
+	ledge_surface.generate_normals()
+	ledge_node = MeshInstance3D.new()
+	ledge_node.name = "TerrainCliffLips"
+	ledge_node.mesh = ledge_surface.commit()
+	var ledge_material := ShaderMaterial.new()
+	ledge_material.shader = load("res://assets/materials/terrain_surface.gdshader") as Shader
+	ledge_node.material_override = ledge_material
+	add_child(ledge_node)
+
+func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool, cell: Vector2i, edge: int, low_level: int, high_level: int) -> void:
 	var center := data.world_center(cell)
 	var angle_a := deg_to_rad(30.0 + 60.0 * edge)
 	var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
@@ -268,14 +280,23 @@ func _append_organic_cliff_face(surface: SurfaceTool, cell: Vector2i, edge: int,
 			right_bottom.y = segment_low
 			left_top.y = segment_high
 			right_top.y = segment_high
+			# Keep the wall's top edge flush to the hex cap, then let lower rock
+			# sections bulge and break away from the regular hex outline.
+			var bottom_fade := clampf((top_y - segment_low) / maxf(STEP_HEIGHT * 0.35, 0.08), 0.0, 1.0)
+			var top_fade := clampf((top_y - segment_high) / maxf(STEP_HEIGHT * 0.35, 0.08), 0.0, 1.0)
+			var ridge_fade := (bottom_fade + top_fade) * 0.5
 			# A raised ridge gives each long buttress several broad, readable planes.
 			var ridge := edge_a.lerp(edge_b, (previous_center + next_center) * 0.5 + rng.randf_range(-0.035, 0.035))
-			ridge.y = (segment_low + segment_high) * 0.5 + rng.randf_range(-0.07, 0.07)
-			ridge += outward * maxf(previous_depth, next_depth)
-			left_bottom += outward * previous_depth
-			right_bottom += outward * previous_depth * rng.randf_range(0.78, 1.08)
-			left_top += outward * next_depth * rng.randf_range(0.78, 1.08)
-			right_top += outward * next_depth
+			ridge.y = (segment_low + segment_high) * 0.5 + rng.randf_range(-0.07, 0.07) * ridge_fade
+			ridge += outward * (maxf(previous_depth, next_depth) + rng.randf_range(-0.045, 0.055)) * ridge_fade
+			left_bottom += outward * (previous_depth + rng.randf_range(-0.055, 0.055)) * bottom_fade
+			right_bottom += outward * (previous_depth * rng.randf_range(0.78, 1.08) + rng.randf_range(-0.055, 0.055)) * bottom_fade
+			left_top += outward * (next_depth * rng.randf_range(0.78, 1.08) + rng.randf_range(-0.055, 0.055)) * top_fade
+			right_top += outward * (next_depth + rng.randf_range(-0.055, 0.055)) * top_fade
+			left_bottom.y += rng.randf_range(-0.035, 0.035) * bottom_fade
+			right_bottom.y += rng.randf_range(-0.035, 0.035) * bottom_fade
+			left_top.y += rng.randf_range(-0.035, 0.035) * top_fade
+			right_top.y += rng.randf_range(-0.035, 0.035) * top_fade
 			var facet_colors: Array[Color] = []
 			for facet in range(4):
 				var facet_color: Color = rock_colors[rng.randi_range(0, rock_colors.size() - 1)]
@@ -325,6 +346,28 @@ func _append_organic_cliff_face(surface: SurfaceTool, cell: Vector2i, edge: int,
 		right_top.y = crack_top
 		_add_triangle(surface, left_bottom, right_bottom, left_top, Color("30312c"))
 		_add_triangle(surface, right_bottom, right_top, left_top, Color("282923"))
+
+func _append_cliff_lip(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, outward: Vector3, top_y: float, color: Color, rng: RandomNumberGenerator) -> void:
+	var divisions := 5
+	var previous_outer_a := Vector3.ZERO
+	var previous_outer_b := Vector3.ZERO
+	for segment in range(divisions + 1):
+		var edge_t := float(segment) / divisions
+		var width := rng.randf_range(0.13, 0.22)
+		var drop := tan(deg_to_rad(23.0)) * width
+		var inner := edge_a.lerp(edge_b, edge_t)
+		inner.y = top_y + 0.006
+		var outer := inner + outward * width
+		outer.y = top_y - drop + rng.randf_range(-0.018, 0.018)
+		if segment > 0:
+			var previous_inner_a := edge_a.lerp(edge_b, float(segment - 1) / divisions)
+			var previous_inner_b := inner
+			previous_inner_a.y = top_y + 0.006
+			previous_inner_b.y = top_y + 0.006
+			_add_triangle(surface, previous_inner_a, previous_inner_b, outer, color)
+			_add_triangle(surface, previous_inner_a, outer, previous_outer_a, color)
+		previous_outer_a = outer
+		previous_outer_b = outer
 
 func refresh_cliffs() -> void:
 	_rebuild_cliffs()
