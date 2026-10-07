@@ -4,7 +4,7 @@ Standalone Godot 4.7 project for a mobile-friendly hex map builder. This reposit
 
 ## Open in Godot
 
-Open the repository root in Godot 4.7. The project starts in a blank 3D scene. It uses the Mobile renderer and Android ETC2/ASTC texture import setting.
+Open the repository root in Godot 4.7. The project opens on a plain-color 64×128 hex grid preview. It uses the Mobile renderer and Android ETC2/ASTC texture import setting.
 
 ## Layout
 
