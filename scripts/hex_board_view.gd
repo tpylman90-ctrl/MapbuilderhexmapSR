@@ -236,50 +236,65 @@ func _append_organic_cliff_face(surface: SurfaceTool, cell: Vector2i, edge: int,
 	_add_triangle(surface, base_a, top_b, base_b, Color("292c27"))
 
 	var rock_colors: Array[Color] = [
-		Color("51534d"), Color("66675f"), Color("77766c"),
-		Color("464942"), Color("898477"), Color("5b5b53"),
-		Color("706e64"), Color("4c5049")
+		Color("514f47"), Color("68655b"), Color("777267"),
+		Color("44463f"), Color("898173"), Color("5b594f"),
+		Color("706b5f"), Color("4c4d45"), Color("625c50")
 	]
-	# Broad irregular plates read as fractured rock columns. The small number of
-	# large pieces keeps the silhouette legible and the mesh light on Android.
-	var rows := clampi(ceili(wall_height / 0.72), 1, 18)
-	for row in range(rows):
-		var row_low := bottom_y + wall_height * float(row) / rows
-		var row_high := bottom_y + wall_height * float(row + 1) / rows
-		var row_center := (row_low + row_high) * 0.5
-		var row_height := row_high - row_low
-		var plates_in_row := 2 if rng.randf() < 0.78 else 3
-		for plate_index in range(plates_in_row):
-			var t_center := (float(plate_index) + 0.5) / plates_in_row
-			t_center = clampf(t_center + rng.randf_range(-0.13, 0.13), 0.12, 0.88)
-			var t_radius := rng.randf_range(0.12, 0.27) if plates_in_row == 2 else rng.randf_range(0.09, 0.20)
-			var y_radius := row_height * rng.randf_range(0.34, 0.62)
-			var plate_center := edge_a.lerp(edge_b, t_center)
-			plate_center.y = row_center + rng.randf_range(-row_height * 0.12, row_height * 0.12)
-			plate_center += outward * rng.randf_range(0.075, 0.16)
-			var point_count := rng.randi_range(5, 7)
-			var plate_points: Array[Vector3] = []
-			var phase := rng.randf_range(-0.2, 0.2)
-			for point_index in range(point_count):
-				var angle := phase + TAU * float(point_index) / point_count
-				var irregularity := rng.randf_range(0.72, 1.22)
-				var point_t := clampf(t_center + cos(angle) * t_radius * irregularity, 0.015, 0.985)
-				var point_y := clampf(plate_center.y + sin(angle) * y_radius * irregularity, bottom_y + 0.015, top_y + 0.035)
-				var point := edge_a.lerp(edge_b, point_t)
-				point.y = point_y
-				point += outward * rng.randf_range(0.07, 0.22)
-				plate_points.append(point)
-			for point_index in range(point_count):
-				var next_index := (point_index + 1) % point_count
+	# Build long, broken vertical buttresses. Each band shifts and changes width,
+	# then a raised inner ridge splits it into additional angular facets. Gaps
+	# between the buttresses reveal the dark backing as deep seams.
+	var buttress_count := 3
+	var vertical_segments := clampi(ceili(wall_height / 0.28), 3, 16)
+	var centers: Array[float] = []
+	var widths: Array[float] = []
+	var depths: Array[float] = []
+	for buttress in range(buttress_count):
+		centers.append((float(buttress) + 0.5) / buttress_count + rng.randf_range(-0.035, 0.035))
+		widths.append(rng.randf_range(0.085, 0.145))
+		depths.append(rng.randf_range(0.12, 0.22))
+	for buttress in range(buttress_count):
+		var previous_center: float = centers[buttress]
+		var previous_width: float = widths[buttress]
+		var previous_depth: float = depths[buttress]
+		for segment in range(vertical_segments):
+			var segment_low := bottom_y + wall_height * float(segment) / vertical_segments
+			var segment_high := bottom_y + wall_height * float(segment + 1) / vertical_segments
+			var next_center := clampf(previous_center + rng.randf_range(-0.055, 0.055), 0.10, 0.90)
+			var next_width := clampf(previous_width + rng.randf_range(-0.035, 0.035), 0.065, 0.16)
+			var next_depth := clampf(previous_depth + rng.randf_range(-0.06, 0.06), 0.09, 0.25)
+			var left_bottom := edge_a.lerp(edge_b, clampf(previous_center - previous_width, 0.01, 0.99))
+			var right_bottom := edge_a.lerp(edge_b, clampf(previous_center + previous_width, 0.01, 0.99))
+			var left_top := edge_a.lerp(edge_b, clampf(next_center - next_width, 0.01, 0.99))
+			var right_top := edge_a.lerp(edge_b, clampf(next_center + next_width, 0.01, 0.99))
+			left_bottom.y = segment_low
+			right_bottom.y = segment_low
+			left_top.y = segment_high
+			right_top.y = segment_high
+			# A raised ridge gives each long buttress several broad, readable planes.
+			var ridge := edge_a.lerp(edge_b, (previous_center + next_center) * 0.5 + rng.randf_range(-0.035, 0.035))
+			ridge.y = (segment_low + segment_high) * 0.5 + rng.randf_range(-0.07, 0.07)
+			ridge += outward * maxf(previous_depth, next_depth)
+			left_bottom += outward * previous_depth
+			right_bottom += outward * previous_depth * rng.randf_range(0.78, 1.08)
+			left_top += outward * next_depth * rng.randf_range(0.78, 1.08)
+			right_top += outward * next_depth
+			var facet_colors: Array[Color] = []
+			for facet in range(4):
 				var facet_color: Color = rock_colors[rng.randi_range(0, rock_colors.size() - 1)]
-				if sin(phase + TAU * float(point_index) / point_count) > 0.35 and row == rows - 1:
-					# Warm gray highlights at the lip catch the light beneath the grass cap.
-					facet_color = facet_color.lightened(0.12)
-				_add_triangle(surface, plate_center + outward * 0.04, plate_points[point_index], plate_points[next_index], facet_color)
+				if segment == vertical_segments - 1 and facet % 2 == 0:
+					facet_color = facet_color.lightened(0.08)
+				facet_colors.append(facet_color)
+			_add_triangle(surface, left_bottom, right_bottom, ridge, facet_colors[0])
+			_add_triangle(surface, right_bottom, right_top, ridge, facet_colors[1])
+			_add_triangle(surface, right_top, left_top, ridge, facet_colors[2])
+			_add_triangle(surface, left_top, left_bottom, ridge, facet_colors[3])
+			previous_center = next_center
+			previous_width = next_width
+			previous_depth = next_depth
 
 	# Moss stays sparse and close to the upper ledge, like growth in the rock seams.
 	var moss_colors: Array[Color] = [Color("4d6038"), Color("687748"), Color("78834d")]
-	var moss_count := clampi(ceili(edge_length * wall_height / 1.3), 1, 3)
+	var moss_count := clampi(ceili(edge_length * wall_height / 2.0), 1, 2)
 	for moss_index in range(moss_count):
 		var moss_t := rng.randf_range(0.12, 0.88)
 		var moss_width := rng.randf_range(0.035, 0.085)
