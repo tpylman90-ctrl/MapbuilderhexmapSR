@@ -21,6 +21,13 @@ var tool_status: Label
 var undo_button: Button
 var redo_button: Button
 var pan_button: Button
+var zoom_slider: HSlider
+var tilt_slider: HSlider
+var orbit_slider: HSlider
+var camera_distance: float = 235.0
+var camera_tilt_degrees: float = 52.0
+var camera_yaw_degrees: float = 42.0
+var _syncing_camera_controls: bool = false
 var fill_dialog: ConfirmationDialog
 var _last_stroke_cell := INVALID_CELL
 var _flatten_level: int = 0
@@ -40,7 +47,7 @@ var _redo_history: Array[Dictionary] = []
 func _ready() -> void:
 	camera_pivot = get_node("CameraPivot")
 	camera = get_node("CameraPivot/Camera3D") as Camera3D
-	camera.look_at(camera_pivot.global_position, Vector3.UP)
+	_apply_camera_pose()
 	board_view = HexBoardView.new()
 	board_view.name = "BoardView"
 	add_child(board_view)
@@ -154,20 +161,6 @@ func _build_editor_ui() -> void:
 	)
 	_make_button(ground_actions, "Fill board…", func(): _confirm_fill_ground())
 
-	var camera_label := Label.new()
-	camera_label.text = "VIEW"
-	camera_label.add_theme_color_override("font_color", Color("c7b785"))
-	content.add_child(camera_label)
-	var camera_row := HBoxContainer.new()
-	content.add_child(camera_row)
-	_make_button(camera_row, "−", func(): _zoom_camera(1.18))
-	_make_button(camera_row, "+", func(): _zoom_camera(0.85))
-	pan_button = Button.new()
-	pan_button.text = "Pan view"
-	pan_button.toggle_mode = true
-	pan_button.custom_minimum_size.y = 42.0
-	pan_button.toggled.connect(func(enabled: bool): pan_mode = enabled)
-	camera_row.add_child(pan_button)
 	tool_status = Label.new()
 	tool_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tool_status.add_theme_color_override("font_color", Color("a7ada5"))
@@ -192,7 +185,77 @@ func _build_editor_ui() -> void:
 	fill_dialog.title = "Fill ground layer"
 	fill_dialog.confirmed.connect(_fill_ground)
 	layer.add_child(fill_dialog)
+	_build_camera_hud(layer)
 	_update_tool_status()
+
+func _build_camera_hud(layer: CanvasLayer) -> void:
+	var hud := PanelContainer.new()
+	hud.name = "CameraHUD"
+	hud.anchor_left = 1.0
+	hud.anchor_right = 1.0
+	hud.offset_left = -258.0
+	hud.offset_right = -10.0
+	hud.offset_top = 10.0
+	hud.offset_bottom = 258.0
+	var hud_style := StyleBoxFlat.new()
+	hud_style.bg_color = Color(0.055, 0.065, 0.058, 0.96)
+	hud_style.border_color = Color("806f50")
+	hud_style.set_border_width_all(1)
+	hud_style.set_corner_radius_all(10)
+	hud_style.content_margin_left = 10.0
+	hud_style.content_margin_right = 10.0
+	hud_style.content_margin_top = 8.0
+	hud_style.content_margin_bottom = 8.0
+	hud.add_theme_stylebox_override("panel", hud_style)
+	layer.add_child(hud)
+
+	var controls := VBoxContainer.new()
+	controls.add_theme_constant_override("separation", 4)
+	hud.add_child(controls)
+	var title := Label.new()
+	title.text = "CAMERA"
+	title.add_theme_color_override("font_color", Color("e1ca91"))
+	controls.add_child(title)
+
+	var button_row := HBoxContainer.new()
+	controls.add_child(button_row)
+	_make_button(button_row, "−", func(): _zoom_camera(1.15))
+	_make_button(button_row, "+", func(): _zoom_camera(0.87))
+	pan_button = Button.new()
+	pan_button.text = "Slide"
+	pan_button.toggle_mode = true
+	pan_button.custom_minimum_size.y = 42.0
+	pan_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pan_button.toggled.connect(func(enabled: bool): pan_mode = enabled)
+	button_row.add_child(pan_button)
+	_make_button(button_row, "Home", _reset_camera)
+
+	var zoom_label := Label.new()
+	zoom_label.text = "Zoom"
+	zoom_label.add_theme_color_override("font_color", Color("a7ada5"))
+	controls.add_child(zoom_label)
+	zoom_slider = _make_camera_slider(controls, 95.0, 360.0, camera_distance, _on_zoom_slider_changed)
+	var tilt_label := Label.new()
+	tilt_label.text = "Tilt"
+	tilt_label.add_theme_color_override("font_color", Color("a7ada5"))
+	controls.add_child(tilt_label)
+	tilt_slider = _make_camera_slider(controls, 20.0, 84.0, camera_tilt_degrees, _on_tilt_slider_changed)
+	var orbit_label := Label.new()
+	orbit_label.text = "Orbit"
+	orbit_label.add_theme_color_override("font_color", Color("a7ada5"))
+	controls.add_child(orbit_label)
+	orbit_slider = _make_camera_slider(controls, 0.0, 360.0, camera_yaw_degrees, _on_orbit_slider_changed)
+
+func _make_camera_slider(parent: Control, minimum: float, maximum: float, initial_value: float, callback: Callable) -> HSlider:
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = 1.0
+	slider.value = initial_value
+	slider.custom_minimum_size.y = 24.0
+	slider.value_changed.connect(callback)
+	parent.add_child(slider)
+	return slider
 
 func _add_sculpt_button(parent: Control, button_text: String, tool: int) -> void:
 	var button := _make_button(parent, button_text, func(): _set_elevation_tool(tool))
@@ -271,7 +334,11 @@ func _update_readout() -> void:
 	readout.text = "Hex %d, %d  •  Level %d  •  %s\nTool: %s" % [selected_cell.x, selected_cell.y, grid.elevation_at(selected_cell), terrain_name, operation]
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch:
+	if event is InputEventMagnifyGesture:
+		_zoom_camera(1.0 / maxf(event.factor, 0.1))
+	elif event is InputEventPanGesture:
+		_pan_camera(event.delta)
+	elif event is InputEventScreenTouch:
 		if event.pressed:
 			_begin_pointer(event.position)
 		else:
@@ -484,13 +551,61 @@ func _redo() -> void:
 	_update_readout()
 
 func _zoom_camera(factor: float) -> void:
-	var position := camera.position * factor
-	var distance := clampf(position.length(), 45.0, 260.0)
-	camera.position = position.normalized() * distance
+	camera_distance = clampf(camera_distance * factor, 95.0, 360.0)
+	_sync_camera_controls()
+	_apply_camera_pose()
+
+func _apply_camera_pose() -> void:
+	if camera == null or camera_pivot == null:
+		return
+	var tilt := deg_to_rad(camera_tilt_degrees)
+	var yaw := deg_to_rad(camera_yaw_degrees)
+	var horizontal_distance := camera_distance * cos(tilt)
+	camera.position = Vector3(
+		sin(yaw) * horizontal_distance,
+		sin(tilt) * camera_distance,
+		cos(yaw) * horizontal_distance
+	)
+	camera.look_at(camera_pivot.global_position, Vector3.UP)
+
+func _on_zoom_slider_changed(value: float) -> void:
+	if _syncing_camera_controls:
+		return
+	camera_distance = value
+	_apply_camera_pose()
+
+func _on_tilt_slider_changed(value: float) -> void:
+	if _syncing_camera_controls:
+		return
+	camera_tilt_degrees = value
+	_apply_camera_pose()
+
+func _on_orbit_slider_changed(value: float) -> void:
+	if _syncing_camera_controls:
+		return
+	camera_yaw_degrees = value
+	_apply_camera_pose()
+
+func _sync_camera_controls() -> void:
+	if zoom_slider == null:
+		return
+	_syncing_camera_controls = true
+	zoom_slider.value = camera_distance
+	tilt_slider.value = camera_tilt_degrees
+	orbit_slider.value = camera_yaw_degrees
+	_syncing_camera_controls = false
+
+func _reset_camera() -> void:
+	camera_pivot.position = Vector3.ZERO
+	camera_distance = 235.0
+	camera_tilt_degrees = 52.0
+	camera_yaw_degrees = 42.0
+	_sync_camera_controls()
+	_apply_camera_pose()
 
 func _pan_camera(screen_delta: Vector2) -> void:
 	var viewport_height := maxf(1.0, get_viewport().get_visible_rect().size.y)
-	var distance := camera.position.length()
+	var distance := camera_distance
 	var world_per_pixel := 2.0 * distance * tan(deg_to_rad(camera.fov * 0.5)) / viewport_height
 	var right := camera.global_transform.basis.x
 	var forward := camera.global_transform.basis.z
