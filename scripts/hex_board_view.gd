@@ -347,10 +347,19 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 		_add_triangle(surface, left_bottom, right_bottom, left_top, Color("30312c"))
 		_add_triangle(surface, right_bottom, right_top, left_top, Color("282923"))
 
+	_append_cliff_lip(
+		ledge_surface,
+		edge_a,
+		edge_b,
+		outward,
+		top_y,
+		HexGrid.TERRAIN_COLORS[data.terrain_at(cell)],
+		rng
+	)
+
 func _append_cliff_lip(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, outward: Vector3, top_y: float, color: Color, rng: RandomNumberGenerator) -> void:
 	var divisions := 5
-	var previous_outer_a := Vector3.ZERO
-	var previous_outer_b := Vector3.ZERO
+	var previous_outer := Vector3.ZERO
 	for segment in range(divisions + 1):
 		var edge_t := float(segment) / divisions
 		var width := rng.randf_range(0.13, 0.22)
@@ -360,14 +369,11 @@ func _append_cliff_lip(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, o
 		var outer := inner + outward * width
 		outer.y = top_y - drop + rng.randf_range(-0.018, 0.018)
 		if segment > 0:
-			var previous_inner_a := edge_a.lerp(edge_b, float(segment - 1) / divisions)
-			var previous_inner_b := inner
-			previous_inner_a.y = top_y + 0.006
-			previous_inner_b.y = top_y + 0.006
-			_add_triangle(surface, previous_inner_a, previous_inner_b, outer, color)
-			_add_triangle(surface, previous_inner_a, outer, previous_outer_a, color)
-		previous_outer_a = outer
-		previous_outer_b = outer
+			var previous_inner := edge_a.lerp(edge_b, float(segment - 1) / divisions)
+			previous_inner.y = top_y + 0.006
+			_add_triangle(surface, previous_inner, inner, outer, color)
+			_add_triangle(surface, previous_inner, outer, previous_outer, color)
+		previous_outer = outer
 
 func refresh_cliffs() -> void:
 	_rebuild_cliffs()
