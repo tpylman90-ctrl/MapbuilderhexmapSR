@@ -198,10 +198,8 @@ func _rebuild_cliffs() -> void:
 	cliff_node = MeshInstance3D.new()
 	cliff_node.name = "AutoCliffFaces"
 	cliff_node.mesh = surface.commit()
-	var material := StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.roughness = 0.98
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var material := ShaderMaterial.new()
+	material.shader = load("res://assets/materials/cliff_rock_texture.gdshader") as Shader
 	cliff_node.material_override = material
 	add_child(cliff_node)
 
