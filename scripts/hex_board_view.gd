@@ -4,10 +4,11 @@ extends Node3D
 const CAP_HEIGHT: float = 0.18
 const EDGE_RADIUS: float = HexGrid.HEX_RADIUS * 0.99
 const STEP_HEIGHT: float = HexGrid.HEIGHT_PER_LEVEL
-const GRASS_TUFTS_PER_HEX: int = 3
+const GRASS_TUFTS_PER_HEX: int = 4
 const SELECT_COLOR := Color("efcf78")
 
 var data: HexGrid
+var world_environment: WorldEnvironment
 var tile_instances: MultiMesh
 var grid_node: MultiMeshInstance3D
 var grass_instances: MultiMesh
@@ -45,12 +46,22 @@ func _build_backing() -> void:
 	var world := WorldEnvironment.new()
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color("101813")
+	environment.background_color = Color("98aaa2")
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color("c5bea8")
+	environment.ambient_light_color = Color("c7c9b3")
 	environment.ambient_light_energy = 0.43
+	environment.tonemap_exposure = 0.95
+	environment.fog_enabled = true
+	environment.fog_light_color = Color("a9bdb1")
+	environment.fog_light_energy = 0.78
+	environment.fog_sky_affect = 0.14
+	environment.fog_depth_enabled = true
+	environment.fog_depth_begin = 48.0
+	environment.fog_depth_end = 260.0
+	environment.fog_depth_curve = 1.22
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
 	world.environment = environment
+	world_environment = world
 	add_child(world)
 
 	var plane := PlaneMesh.new()
@@ -66,6 +77,10 @@ func _build_backing() -> void:
 	material.roughness = 1.0
 	backing.material_override = material
 	add_child(backing)
+
+func set_distant_haze(enabled: bool) -> void:
+	if world_environment != null and world_environment.environment != null:
+		world_environment.environment.fog_enabled = enabled
 
 func _make_hex_mesh() -> ArrayMesh:
 	var surface := SurfaceTool.new()
@@ -271,18 +286,18 @@ func _refresh_grass_cell(cell: Vector2i, index: int) -> void:
 		var instance_index := base_index + tuft_index
 		var rng := RandomNumberGenerator.new()
 		rng.seed = int(index * 92821 + tuft_index * 17431 + 3719)
-		if not is_grass or rng.randf() > 0.55:
+		if not is_grass or rng.randf() > 0.64:
 			grass_instances.set_instance_transform(instance_index, Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3.ZERO))
 			grass_instances.set_instance_color(instance_index, Color.WHITE)
 			continue
 		var tuft_center := center
 		tuft_center.x += rng.randf_range(-0.48, 0.48)
 		tuft_center.z += rng.randf_range(-0.42, 0.42)
-		var scale := rng.randf_range(0.92, 1.42)
+		var scale := rng.randf_range(0.84, 1.38)
 		var rotation := rng.randf_range(0.0, TAU)
 		var basis := Basis(Vector3.UP, rotation).scaled(Vector3(scale, scale, scale))
 		grass_instances.set_instance_transform(instance_index, Transform3D(basis, tuft_center))
-		var tint := rng.randf_range(0.82, 1.16)
+		var tint := rng.randf_range(0.80, 1.12)
 		grass_instances.set_instance_color(instance_index, Color(tint, tint, tint, 1.0))
 
 func _build_selection_outline() -> void:

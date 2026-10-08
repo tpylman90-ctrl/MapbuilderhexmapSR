@@ -23,6 +23,14 @@ func _run() -> void:
 	grid.set_terrain(cell, HexGrid.Terrain.DIRT)
 	var board_view := editor.get("board_view") as HexBoardView
 	board_view.refresh_cell(cell)
+	board_view.set_distant_haze(false)
+	if board_view.world_environment.environment.fog_enabled:
+		_fail("Map display could not disable distant haze")
+		return
+	board_view.set_distant_haze(true)
+	if not board_view.world_environment.environment.fog_enabled:
+		_fail("Map display could not restore distant haze")
+		return
 
 	var object := editor.call("_place_active_object", cell, false, "pine", 45.0, 1.25) as Node3D
 	if object == null:

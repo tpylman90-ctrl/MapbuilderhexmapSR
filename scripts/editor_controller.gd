@@ -296,6 +296,11 @@ func _build_editor_ui() -> void:
 			_grass_node.visible = enabled
 	)
 	map_page.add_child(grass_toggle)
+	var haze_toggle := CheckButton.new()
+	haze_toggle.text = "Distant haze"
+	haze_toggle.button_pressed = true
+	haze_toggle.toggled.connect(func(enabled: bool): board_view.set_distant_haze(enabled))
+	map_page.add_child(haze_toggle)
 
 	tool_status = Label.new()
 	tool_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
