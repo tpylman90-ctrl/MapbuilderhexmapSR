@@ -20,7 +20,7 @@ var water_subdivisions: int = 4
 var water_flow_direction := Vector2(0.707107, 0.707107)
 var shoreline_edges: Dictionary = {}
 var _shoreline_rebuild_queued := false
-var shoreline_node: MultiMeshInstance3D
+var shoreline_node: MeshInstance3D
 var shoreline_shader_material: ShaderMaterial
 var _refreshing_all := false
 var terrain_shader_material: ShaderMaterial
