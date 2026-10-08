@@ -251,7 +251,7 @@ func _build_camera_hud(layer: CanvasLayer) -> void:
 	zoom_label.text = "Zoom"
 	zoom_label.add_theme_color_override("font_color", Color("a7ada5"))
 	controls.add_child(zoom_label)
-	zoom_slider = _make_camera_slider(controls, 26.0, 360.0, camera_distance, _on_zoom_slider_changed)
+	zoom_slider = _make_camera_slider(controls, 7.0, 360.0, camera_distance, _on_zoom_slider_changed)
 	var tilt_label := Label.new()
 	tilt_label.text = "Tilt"
 	tilt_label.add_theme_color_override("font_color", Color("a7ada5"))
@@ -613,7 +613,7 @@ func _redo() -> void:
 	_update_readout()
 
 func _zoom_camera(factor: float) -> void:
-	camera_distance = clampf(camera_distance * factor, 26.0, 360.0)
+	camera_distance = clampf(camera_distance * factor, 7.0, 360.0)
 	_sync_camera_controls()
 	_apply_camera_pose()
 

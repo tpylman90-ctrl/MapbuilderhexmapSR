@@ -9,6 +9,7 @@ const SELECT_COLOR := Color("efcf78")
 var data: HexGrid
 var tile_instances: MultiMesh
 var grid_node: MultiMeshInstance3D
+var grass_instances: MultiMesh
 var outline_instances: MultiMesh
 var outline_node: MultiMeshInstance3D
 var cliff_node: MeshInstance3D
@@ -114,6 +115,7 @@ func _build_tile_mesh() -> void:
 	material.shader = load("res://assets/materials/terrain_surface.gdshader") as Shader
 	grid_node.material_override = material
 	add_child(grid_node)
+	_build_grass_instances()
 
 	var outlines := MultiMesh.new()
 	outlines.transform_format = MultiMesh.TRANSFORM_3D
@@ -129,6 +131,66 @@ func _build_tile_mesh() -> void:
 	outline_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	outline_node.material_override = outline_material
 	add_child(outline_node)
+
+func _build_grass_instances() -> void:
+	var instances := MultiMesh.new()
+	instances.transform_format = MultiMesh.TRANSFORM_3D
+	instances.use_colors = true
+	instances.mesh = _make_grass_tuft_mesh()
+	instances.instance_count = HexGrid.COLUMNS * HexGrid.ROWS
+	var node := MultiMeshInstance3D.new()
+	node.name = "GrassTufts"
+	node.multimesh = instances
+	var material := StandardMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.roughness = 0.88
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	node.material_override = material
+	add_child(node)
+	grass_instances = instances
+
+func _make_grass_tuft_mesh() -> ArrayMesh:
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var blade_colors: Array[Color] = [Color("8bbf4b"), Color("a1cb55"), Color("63963d"), Color("79ad43")]
+	for blade in range(5):
+		var angle := TAU * float(blade) / 5.0 + float(blade % 2) * 0.23
+		var direction := Vector3(cos(angle), 0.0, sin(angle))
+		var side := Vector3(-direction.z, 0.0, direction.x)
+		var height := 0.25 + float((blade * 7) % 5) * 0.035
+		var width := 0.035 + float(blade % 3) * 0.008
+		var base_left := -side * width
+		var base_right := side * width
+		var middle := direction * 0.07 + Vector3.UP * height * 0.52
+		var tip := direction * 0.11 + Vector3.UP * height
+		var color := blade_colors[blade % blade_colors.size()]
+		_add_colored_triangle(surface, base_left, base_right, middle, color.darkened(0.12), color.darkened(0.08), color)
+		_add_colored_triangle(surface, base_right, tip, middle, color.darkened(0.08), color.lightened(0.06), color)
+	surface.generate_normals()
+	return surface.commit()
+
+func _add_colored_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color_a: Color, color_b: Color, color_c: Color) -> void:
+	for vertex in [[a, color_a], [b, color_b], [c, color_c]]:
+		surface.set_color(vertex[1])
+		surface.add_vertex(vertex[0])
+
+func _refresh_grass_cell(cell: Vector2i, index: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(index * 92821 + 3719)
+	if data.terrain_at(cell) != HexGrid.Terrain.GRASS or rng.randf() > 0.42:
+		grass_instances.set_instance_transform(index, Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3.ZERO))
+		grass_instances.set_instance_color(index, Color.WHITE)
+		return
+	var center := data.world_center(cell)
+	center.x += rng.randf_range(-0.39, 0.39)
+	center.z += rng.randf_range(-0.39, 0.39)
+	center.y = data.elevation_at(cell) * STEP_HEIGHT + CAP_HEIGHT * 0.5 + 0.004
+	var scale := rng.randf_range(0.72, 1.18)
+	var rotation := rng.randf_range(0.0, TAU)
+	var basis := Basis(Vector3.UP, rotation).scaled(Vector3(scale, scale, scale))
+	grass_instances.set_instance_transform(index, Transform3D(basis, center))
+	var tint := rng.randf_range(0.86, 1.14)
+	grass_instances.set_instance_color(index, Color(tint, tint, tint, 1.0))
 
 func _build_selection_outline() -> void:
 	var outline := ImmediateMesh.new()
@@ -162,6 +224,7 @@ func refresh_cell(cell: Vector2i) -> void:
 	tile_instances.set_instance_transform(index, Transform3D(Basis.IDENTITY, center))
 	outline_instances.set_instance_transform(index, Transform3D(Basis.IDENTITY, center))
 	tile_instances.set_instance_color(index, HexGrid.TERRAIN_COLORS[data.terrain_at(cell)])
+	_refresh_grass_cell(cell, index)
 	if cell == selected_cell:
 		_update_selection()
 
