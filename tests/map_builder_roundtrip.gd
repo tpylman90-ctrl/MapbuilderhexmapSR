@@ -78,6 +78,29 @@ func _run() -> void:
 	if water_instances == null or water_instances.get_instance_transform(grid.index_of(water_cell)).basis.get_scale().length() < 1.0:
 		_fail("Water terrain did not enable its animated water instance")
 		return
+	board_view.set_water_flow_direction(Vector2.LEFT)
+	var flow_material := board_view.get("water_shader_material") as ShaderMaterial
+	if flow_material == null:
+		_fail("Water shader material was not created")
+		return
+	var applied_flow: Vector2 = flow_material.get_shader_parameter("flow_direction")
+	if applied_flow.distance_to(Vector2.LEFT) > 0.001:
+		_fail("Water flow direction was not applied to the wave material")
+		return
+	var shoreline_edge := 0
+	var shore_neighbor := grid.neighbor_for_edge(water_cell, shoreline_edge)
+	grid.set_terrain(shore_neighbor, HexGrid.Terrain.GRASS)
+	board_view.refresh_cell(water_cell)
+	var shoreline_instances := board_view.get("shoreline_instances") as MultiMesh
+	var shoreline_index := grid.index_of(water_cell) * 6 + shoreline_edge
+	if shoreline_instances == null or shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length() < 1.0:
+		_fail("Water-ground edge did not receive a shoreline highlight")
+		return
+	grid.set_terrain(shore_neighbor, HexGrid.Terrain.WATER)
+	board_view.refresh_cell(shore_neighbor)
+	if shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length() > 0.01:
+		_fail("Internal water-water edges should not render shoreline foam")
+		return
 	var low_vertex_count := (water_instances.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
 	board_view.set_water_subdivisions(6)
 	var high_vertex_count := (water_instances.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()

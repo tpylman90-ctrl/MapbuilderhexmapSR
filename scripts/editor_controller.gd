@@ -279,6 +279,24 @@ func _build_editor_ui() -> void:
 	)
 	map_page.add_child(water_detail)
 
+	var flow_label := Label.new()
+	flow_label.text = "Water flow direction"
+	flow_label.add_theme_color_override("font_color", Color("a7ada5"))
+	map_page.add_child(flow_label)
+	var flow_direction := OptionButton.new()
+	var flow_names := ["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"]
+	var flow_vectors: Array[Vector2] = [
+		Vector2(0.0, -1.0), Vector2(0.707107, -0.707107), Vector2(1.0, 0.0), Vector2(0.707107, 0.707107),
+		Vector2(0.0, 1.0), Vector2(-0.707107, 0.707107), Vector2(-1.0, 0.0), Vector2(-0.707107, -0.707107)
+	]
+	for flow_name in flow_names:
+		flow_direction.add_item(flow_name)
+	flow_direction.select(3)
+	flow_direction.item_selected.connect(func(item: int):
+		board_view.set_water_flow_direction(flow_vectors[item])
+	)
+	map_page.add_child(flow_direction)
+
 	_add_section_title(map_page, "DISPLAY")
 	var grid_toggle := CheckButton.new()
 	grid_toggle.text = "Hex outlines"

@@ -17,6 +17,11 @@ var water_instances: MultiMesh
 var water_node: MultiMeshInstance3D
 var water_shader_material: ShaderMaterial
 var water_subdivisions: int = 4
+var water_flow_direction := Vector2(0.707107, 0.707107)
+var shoreline_instances: MultiMesh
+var shoreline_node: MultiMeshInstance3D
+var shoreline_shader_material: ShaderMaterial
+var _refreshing_all := false
 var terrain_shader_material: ShaderMaterial
 var cliff_shader_material: ShaderMaterial
 var surface_detail_strength: float = 0.78
@@ -24,7 +29,6 @@ var cliff_detail_strength: float = 0.82
 var outline_instances: MultiMesh
 var outline_node: MultiMeshInstance3D
 var cliff_node: MeshInstance3D
-var ledge_node: MeshInstance3D
 var selection_node: MeshInstance3D
 var selected_cell := Vector2i(-1, -1)
 var cliff_noise := FastNoiseLite.new()
@@ -143,6 +147,7 @@ func _build_tile_mesh() -> void:
 	add_child(grid_node)
 	_build_grass_instances()
 	_build_water_instances()
+	_build_shoreline_instances()
 
 	var outlines := MultiMesh.new()
 	outlines.transform_format = MultiMesh.TRANSFORM_3D
@@ -169,6 +174,7 @@ func _build_water_instances() -> void:
 	water_node.multimesh = water_instances
 	water_shader_material = ShaderMaterial.new()
 	water_shader_material.shader = load("res://assets/materials/water_surface.gdshader") as Shader
+	water_shader_material.set_shader_parameter("flow_direction", water_flow_direction)
 	water_node.material_override = water_shader_material
 	add_child(water_node)
 
@@ -189,6 +195,78 @@ func set_water_subdivisions(value: int) -> void:
 	water_subdivisions = bounded
 	if water_instances != null:
 		water_instances.mesh = _make_water_hex_mesh(water_subdivisions)
+
+func set_water_flow_direction(direction: Vector2) -> void:
+	if direction.length_squared() < 0.001:
+		return
+	water_flow_direction = direction.normalized()
+	if water_shader_material != null:
+		water_shader_material.set_shader_parameter("flow_direction", water_flow_direction)
+	if shoreline_shader_material != null:
+		shoreline_shader_material.set_shader_parameter("flow_direction", water_flow_direction)
+
+func _build_shoreline_instances() -> void:
+	shoreline_instances = MultiMesh.new()
+	shoreline_instances.transform_format = MultiMesh.TRANSFORM_3D
+	shoreline_instances.mesh = _make_shoreline_strip_mesh()
+	shoreline_instances.instance_count = HexGrid.COLUMNS * HexGrid.ROWS * 6
+	shoreline_node = MultiMeshInstance3D.new()
+	shoreline_node.name = "WaterGroundShoreline"
+	shoreline_node.multimesh = shoreline_instances
+	shoreline_shader_material = ShaderMaterial.new()
+	shoreline_shader_material.shader = load("res://assets/materials/water_shoreline.gdshader") as Shader
+	shoreline_shader_material.set_shader_parameter("flow_direction", water_flow_direction)
+	shoreline_node.material_override = shoreline_shader_material
+	add_child(shoreline_node)
+
+func _make_shoreline_strip_mesh() -> ArrayMesh:
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var half_length := EDGE_RADIUS * 0.5
+	var apothem := EDGE_RADIUS * cos(PI / 6.0)
+	var outer_z := -apothem + 0.012
+	var inner_z := -apothem + 0.135
+	var a := Vector3(-half_length, 0.0, outer_z)
+	var b := Vector3(half_length, 0.0, outer_z)
+	var c := Vector3(half_length, 0.0, inner_z)
+	var d := Vector3(-half_length, 0.0, inner_z)
+	_add_shoreline_triangle(surface, a, b, c, Vector2(0.0, 0.0), Vector2(1.0, 0.0), Vector2(1.0, 1.0))
+	_add_shoreline_triangle(surface, a, c, d, Vector2(0.0, 0.0), Vector2(1.0, 1.0), Vector2(0.0, 1.0))
+	return surface.commit()
+
+func _add_shoreline_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, uv_a: Vector2, uv_b: Vector2, uv_c: Vector2) -> void:
+	surface.set_normal(Vector3.UP)
+	surface.set_uv(uv_a)
+	surface.add_vertex(a)
+	surface.set_normal(Vector3.UP)
+	surface.set_uv(uv_b)
+	surface.add_vertex(b)
+	surface.set_normal(Vector3.UP)
+	surface.set_uv(uv_c)
+	surface.add_vertex(c)
+
+func _refresh_shorelines_around(cell: Vector2i) -> void:
+	_refresh_shoreline_cell(cell)
+	for edge in range(6):
+		var neighbor := data.neighbor_for_edge(cell, edge)
+		if data.contains(neighbor):
+			_refresh_shoreline_cell(neighbor)
+
+func _refresh_shoreline_cell(cell: Vector2i) -> void:
+	if shoreline_instances == null or not data.contains(cell):
+		return
+	var index := data.index_of(cell)
+	var center := data.world_center(cell)
+	center.y = data.elevation_at(cell) * STEP_HEIGHT + CAP_HEIGHT * 0.5 + 0.026
+	var is_water := data.terrain_at(cell) == HexGrid.Terrain.WATER
+	for edge in range(6):
+		var neighbor := data.neighbor_for_edge(cell, edge)
+		var meets_ground := not data.contains(neighbor) or data.terrain_at(neighbor) != HexGrid.Terrain.WATER
+		var transform := Transform3D(Basis.from_scale(Vector3.ZERO), center)
+		if is_water and meets_ground:
+			var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
+			transform.basis = Basis(Vector3.UP, PI * 0.5 - middle_angle)
+		shoreline_instances.set_instance_transform(index * 6 + edge, transform)
 
 func _make_water_hex_mesh(subdivisions: int) -> ArrayMesh:
 	var surface := SurfaceTool.new()
@@ -318,8 +396,12 @@ func _build_selection_outline() -> void:
 	add_child(selection_node)
 
 func refresh_all() -> void:
+	_refreshing_all = true
 	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
 		refresh_cell(data.cell_from_index(index))
+	_refreshing_all = false
+	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
+		_refresh_shoreline_cell(data.cell_from_index(index))
 	_rebuild_cliffs()
 	_update_selection()
 
@@ -334,6 +416,8 @@ func refresh_cell(cell: Vector2i) -> void:
 	tile_instances.set_instance_color(index, HexGrid.TERRAIN_COLORS[data.terrain_at(cell)])
 	_refresh_grass_cell(cell, index)
 	_refresh_water_cell(cell, index, center)
+	if not _refreshing_all:
+		_refresh_shorelines_around(cell)
 	if cell == selected_cell:
 		_update_selection()
 
@@ -354,13 +438,8 @@ func _rebuild_cliffs() -> void:
 		cliff_node.queue_free()
 		cliff_node = null
 	cliff_shader_material = null
-	if ledge_node != null:
-		ledge_node.queue_free()
-		ledge_node = null
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var ledge_surface := SurfaceTool.new()
-	ledge_surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var cliff_count := 0
 	for row in range(HexGrid.ROWS):
 		for column in range(HexGrid.COLUMNS):
@@ -383,7 +462,7 @@ func _rebuild_cliffs() -> void:
 						continue
 					high_level = maxi(cell_level, 0)
 					low_level = mini(cell_level, 0)
-				_append_organic_cliff_face(surface, ledge_surface, cell, edge, low_level, high_level)
+				_append_organic_cliff_face(surface, cell, edge, low_level, high_level)
 				cliff_count += 1
 	if cliff_count == 0:
 		return
@@ -398,16 +477,8 @@ func _rebuild_cliffs() -> void:
 	cliff_node.material_override = cliff_shader_material
 	add_child(cliff_node)
 
-	ledge_surface.generate_normals()
-	ledge_node = MeshInstance3D.new()
-	ledge_node.name = "TerrainCliffLips"
-	ledge_node.mesh = ledge_surface.commit()
-	var ledge_material := ShaderMaterial.new()
-	ledge_material.shader = load("res://assets/materials/terrain_surface.gdshader") as Shader
-	ledge_node.material_override = ledge_material
-	add_child(ledge_node)
 
-func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool, cell: Vector2i, edge: int, low_level: int, high_level: int) -> void:
+func _append_organic_cliff_face(surface: SurfaceTool, cell: Vector2i, edge: int, low_level: int, high_level: int) -> void:
 	var center := data.world_center(cell)
 	var angle_a := deg_to_rad(30.0 + 60.0 * edge)
 	var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
@@ -464,15 +535,6 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 		_add_side_triangle(surface, left_bottom, right_bottom, left_top, Color("30312c"))
 		_add_side_triangle(surface, right_bottom, right_top, left_top, Color("282923"))
 
-	_append_cliff_lip(
-		ledge_surface,
-		edge_a,
-		edge_b,
-		outward,
-		top_y,
-		HexGrid.TERRAIN_COLORS[data.terrain_at(cell)],
-		rng
-	)
 
 func _append_cliff_backing_grid(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, bottom_y: float, top_y: float, center: Vector3, outward: Vector3, tangent: Vector3) -> void:
 	var horizontal_segments := 12
@@ -546,25 +608,6 @@ func _add_side_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3
 		surface.set_color(vertex_color)
 		surface.set_uv(Vector2((point.x + point.z) * 0.65, point.y * 0.55))
 		surface.add_vertex(point)
-
-func _append_cliff_lip(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, outward: Vector3, top_y: float, color: Color, rng: RandomNumberGenerator) -> void:
-	var divisions := 8
-	var previous_outer := Vector3.ZERO
-	for segment in range(divisions + 1):
-		var edge_t := float(segment) / divisions
-		var width := rng.randf_range(0.30, 0.44)
-		var drop := tan(deg_to_rad(27.0)) * width
-		var inner := edge_a.lerp(edge_b, edge_t)
-		inner.y = top_y + 0.006
-		var outer := inner + outward * width
-		outer.y = top_y - drop + rng.randf_range(-0.018, 0.018)
-		if segment > 0:
-			var previous_inner := edge_a.lerp(edge_b, float(segment - 1) / divisions)
-			previous_inner.y = top_y + 0.006
-			var faded_color := color.darkened(0.16)
-			_add_gradient_triangle(surface, previous_inner, inner, outer, color, color, faded_color)
-			_add_gradient_triangle(surface, previous_inner, outer, previous_outer, color, faded_color, faded_color)
-		previous_outer = outer
 
 func set_surface_detail(value: float) -> void:
 	surface_detail_strength = clampf(value, 0.0, 1.0)
