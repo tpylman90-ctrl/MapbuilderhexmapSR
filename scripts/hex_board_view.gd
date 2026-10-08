@@ -355,6 +355,18 @@ func _add_organic_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vect
 		surface.set_uv(Vector2((point.x + point.z) * 0.65, point.y * 0.55))
 		surface.add_vertex(point)
 
+func _add_side_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color) -> void:
+	for point in [a, b, c]:
+		var edge_wobble := sin(point.x * 5.7 + point.z * 4.1) * 0.055
+		var blend_depth := maxf(0.24, 0.36 + edge_wobble)
+		var blend_t := clampf((cliff_blend_top_y - point.y) / blend_depth, 0.0, 1.0)
+		blend_t = blend_t * blend_t * (3.0 - 2.0 * blend_t)
+		var vertex_color := color.lerp(cliff_blend_color, (1.0 - blend_t) * 0.84)
+		surface.set_smooth_group(0)
+		surface.set_color(vertex_color)
+		surface.set_uv(Vector2((point.x + point.z) * 0.65, point.y * 0.55))
+		surface.add_vertex(point)
+
 func _append_cliff_lip(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, outward: Vector3, top_y: float, color: Color, rng: RandomNumberGenerator) -> void:
 	var divisions := 7
 	var previous_outer := Vector3.ZERO
