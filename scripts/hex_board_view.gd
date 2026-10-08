@@ -55,7 +55,7 @@ func _build_backing() -> void:
 	environment.fog_light_color = Color("a9bdb1")
 	environment.fog_light_energy = 0.78
 	environment.fog_sky_affect = 0.14
-	environment.fog_depth_enabled = true
+	environment.fog_mode = Environment.FOG_MODE_DEPTH
 	environment.fog_depth_begin = 48.0
 	environment.fog_depth_end = 260.0
 	environment.fog_depth_curve = 1.22
