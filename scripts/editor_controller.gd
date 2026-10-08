@@ -1,10 +1,13 @@
 extends Node3D
 
-enum EditMode { ELEVATION, GROUND }
+enum EditMode { ELEVATION, GROUND, PLACEABLE }
 enum ElevationTool { RAISE, LOWER, FLATTEN, SMOOTH, HILL, RIDGE }
 
 const INVALID_CELL := Vector2i(-1, -1)
 const CAP_HALF_HEIGHT: float = 0.09
+const HOUSE_MODEL_PATH := "res://assets/models/cartoon_house.glb"
+const HOUSE_MODEL_SCALE: float = 0.38
+const HOUSE_MODEL_BOTTOM_Y: float = -1.166189
 
 var grid := HexGrid.new()
 var board_view: HexBoardView
@@ -35,6 +38,8 @@ var _tool_group := ButtonGroup.new()
 var _sculpt_buttons: Array[Button] = []
 var _terrain_buttons: Array[Button] = []
 var _sample_button: Button
+var _placeable_button: Button
+var _placed_objects: Array[Node3D] = []
 var pan_mode: bool = false
 var _pointer_active: bool = false
 var _pointer_pan: bool = false
@@ -150,6 +155,18 @@ func _build_editor_ui() -> void:
 		_style_terrain_button(terrain_button, terrain_id)
 		_terrain_buttons.append(terrain_button)
 	_terrain_buttons[HexGrid.Terrain.GRASS].button_pressed = true
+
+	content.add_child(HSeparator.new())
+	var placeable_label := Label.new()
+	placeable_label.text = "PLACEABLES"
+	placeable_label.add_theme_color_override("font_color", Color("c7b785"))
+	content.add_child(placeable_label)
+	var placeable_row := HBoxContainer.new()
+	content.add_child(placeable_row)
+	_placeable_button = _make_button(placeable_row, "Cartoon House", _set_house_place_tool)
+	_placeable_button.toggle_mode = true
+	_placeable_button.button_group = _tool_group
+
 	var ground_actions := HBoxContainer.new()
 	content.add_child(ground_actions)
 	_sample_button = _make_button(ground_actions, "Sample", func(): _set_sample_tool())
@@ -317,8 +334,18 @@ func _set_sample_tool() -> void:
 	_update_tool_status()
 	_update_readout()
 
+func _set_house_place_tool() -> void:
+	mode = EditMode.PLACEABLE
+	if _placeable_button != null and not _placeable_button.button_pressed:
+		_placeable_button.button_pressed = true
+	_update_tool_status()
+	_update_readout()
+
 func _update_tool_status() -> void:
 	if tool_status == null:
+		return
+	if mode == EditMode.PLACEABLE:
+		tool_status.text = "Place: Cartoon House"
 		return
 	if mode == EditMode.GROUND:
 		tool_status.text = "Sample ground" if _sample_button != null and _sample_button.button_pressed else "Paint: " + HexGrid.TERRAIN_NAMES[active_terrain]
@@ -373,7 +400,7 @@ func _move_pointer(screen_position: Vector2) -> void:
 		return
 	if _pointer_pan:
 		_pan_camera(screen_position - _last_pointer)
-	else:
+	elif mode != EditMode.PLACEABLE:
 		_apply_at_screen(screen_position)
 	_last_pointer = screen_position
 
@@ -400,6 +427,11 @@ func _apply_at_screen(screen_position: Vector2) -> void:
 		_update_tool_status()
 		_update_readout()
 		return
+	if mode == EditMode.PLACEABLE:
+		_place_house(cell)
+		_last_stroke_cell = cell
+		_update_readout()
+		return
 	if _last_stroke_cell == INVALID_CELL:
 		if elevation_tool == ElevationTool.FLATTEN:
 			_flatten_level = grid.elevation_at(cell)
@@ -409,6 +441,36 @@ func _apply_at_screen(screen_position: Vector2) -> void:
 			_apply_brush_at(path_cell)
 	_last_stroke_cell = cell
 	_update_readout()
+
+func _place_house(cell: Vector2i) -> void:
+	var packed_scene := load(HOUSE_MODEL_PATH) as PackedScene
+	if packed_scene == null:
+		tool_status.text = "Could not load cartoon_house.glb"
+		return
+	var house := packed_scene.instantiate() as Node3D
+	if house == null:
+		tool_status.text = "House model root must be a Node3D"
+		return
+	house.name = "PlacedCartoonHouse_%d" % (_placed_objects.size() + 1)
+	house.scale = Vector3.ONE * HOUSE_MODEL_SCALE
+	var center := grid.world_center(cell)
+	var surface_y := grid.elevation_at(cell) * HexGrid.HEIGHT_PER_LEVEL + CAP_HALF_HEIGHT
+	house.position = Vector3(center.x, surface_y - HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE, center.z)
+	board_view.add_child(house)
+	_set_placeable_materials(house)
+	_placed_objects.append(house)
+
+func _set_placeable_materials(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		var material := StandardMaterial3D.new()
+		material.vertex_color_use_as_albedo = true
+		material.roughness = 0.92
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mesh_instance.material_override = material
+		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	for child in node.get_children():
+		_set_placeable_materials(child)
 
 func _apply_brush_at(center: Vector2i) -> void:
 	var cells := grid.brush_cells(center, brush_size)
