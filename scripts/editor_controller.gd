@@ -428,7 +428,7 @@ func _request_load_map(path: String) -> void:
 func _export_map_png(path: String) -> void:
 	var ui_was_visible := _editor_layer.visible
 	_editor_layer.visible = false
-	await RenderingServer.frame_post_draw
+	await get_tree().create_timer(0.15).timeout
 	var image := get_viewport().get_texture().get_image()
 	_editor_layer.visible = ui_was_visible
 	var final_path := path if path.get_extension().to_lower() == "png" else path + ".png"
