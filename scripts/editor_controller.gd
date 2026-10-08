@@ -429,8 +429,15 @@ func _export_map_png(path: String) -> void:
 	var ui_was_visible := _editor_layer.visible
 	_editor_layer.visible = false
 	await get_tree().create_timer(0.15).timeout
-	var image := get_viewport().get_texture().get_image()
+	var viewport_texture := get_viewport().get_texture()
 	_editor_layer.visible = ui_was_visible
+	if viewport_texture == null:
+		tool_status.text = "PNG export is unavailable in this renderer"
+		return
+	var image := viewport_texture.get_image()
+	if image == null or image.is_empty():
+		tool_status.text = "PNG export could not capture the current view"
+		return
 	var final_path := path if path.get_extension().to_lower() == "png" else path + ".png"
 	var error := image.save_png(final_path)
 	if error != OK:
