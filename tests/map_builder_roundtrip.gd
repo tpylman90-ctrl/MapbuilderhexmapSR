@@ -104,7 +104,9 @@ func _run() -> void:
 			reverse_edge = candidate_edge
 	var shared_neighbor_terrain := grid.terrain_at(grid.neighbor_for_edge(water_cell, shoreline_edge))
 	var stale_shore_scale := shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length()
-	print("Shore debug cell=", water_cell, " neighbor=", shore_neighbor, " reverse_edge=", reverse_edge, " neighbor_terrain=", shared_neighbor_terrain, " scale_after_neighbor_refresh=", stale_shore_scale)
+	print("Shore debug cell=", water_cell, " neighbor=", shore_neighbor, " reverse_edge=", reverse_edge, " neighbor_terrain=", shared_neighbor_terrain, " refreshing_all=", board_view.get("_refreshing_all"), " scale_after_neighbor_refresh=", stale_shore_scale)
+	board_view.call("_refresh_shoreline_cell", water_cell)
+	print("Shore debug scale_after_direct_refresh=", shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length())
 	if stale_shore_scale > 0.01:
 		_fail("Internal water-water edges should not render shoreline foam")
 		return
