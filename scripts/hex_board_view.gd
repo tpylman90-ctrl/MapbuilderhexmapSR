@@ -4,6 +4,7 @@ extends Node3D
 const CAP_HEIGHT: float = 0.18
 const EDGE_RADIUS: float = HexGrid.HEX_RADIUS * 0.99
 const STEP_HEIGHT: float = HexGrid.HEIGHT_PER_LEVEL
+const GRASS_TUFTS_PER_HEX: int = 3
 const SELECT_COLOR := Color("efcf78")
 
 var data: HexGrid
@@ -137,7 +138,7 @@ func _build_grass_instances() -> void:
 	instances.transform_format = MultiMesh.TRANSFORM_3D
 	instances.use_colors = true
 	instances.mesh = _make_grass_tuft_mesh()
-	instances.instance_count = HexGrid.COLUMNS * HexGrid.ROWS
+	instances.instance_count = HexGrid.COLUMNS * HexGrid.ROWS * GRASS_TUFTS_PER_HEX
 	var node := MultiMeshInstance3D.new()
 	node.name = "GrassTufts"
 	node.multimesh = instances
@@ -152,17 +153,17 @@ func _build_grass_instances() -> void:
 func _make_grass_tuft_mesh() -> ArrayMesh:
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var blade_colors: Array[Color] = [Color("8bbf4b"), Color("a1cb55"), Color("63963d"), Color("79ad43")]
-	for blade in range(5):
-		var angle := TAU * float(blade) / 5.0 + float(blade % 2) * 0.23
+	var blade_colors: Array[Color] = [Color("65983e"), Color("82b247"), Color("a4c95b"), Color("719d3e"), Color("90b94b")]
+	for blade in range(7):
+		var angle := TAU * float(blade) / 7.0 + float(blade % 2) * 0.19
 		var direction := Vector3(cos(angle), 0.0, sin(angle))
 		var side := Vector3(-direction.z, 0.0, direction.x)
-		var height := 0.25 + float((blade * 7) % 5) * 0.035
-		var width := 0.035 + float(blade % 3) * 0.008
+		var height := 0.30 + float((blade * 7) % 5) * 0.045
+		var width := 0.048 + float(blade % 3) * 0.012
 		var base_left := -side * width
 		var base_right := side * width
-		var middle := direction * 0.07 + Vector3.UP * height * 0.52
-		var tip := direction * 0.11 + Vector3.UP * height
+		var middle := direction * 0.09 + Vector3.UP * height * 0.52
+		var tip := direction * 0.16 + Vector3.UP * height
 		var color := blade_colors[blade % blade_colors.size()]
 		_add_colored_triangle(surface, base_left, base_right, middle, color.darkened(0.12), color.darkened(0.08), color)
 		_add_colored_triangle(surface, base_right, tip, middle, color.darkened(0.08), color.lightened(0.06), color)
@@ -175,22 +176,27 @@ func _add_colored_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vect
 		surface.add_vertex(vertex[0])
 
 func _refresh_grass_cell(cell: Vector2i, index: int) -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = int(index * 92821 + 3719)
-	if data.terrain_at(cell) != HexGrid.Terrain.GRASS or rng.randf() > 0.42:
-		grass_instances.set_instance_transform(index, Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3.ZERO))
-		grass_instances.set_instance_color(index, Color.WHITE)
-		return
+	var is_grass := data.terrain_at(cell) == HexGrid.Terrain.GRASS
+	var base_index := index * GRASS_TUFTS_PER_HEX
 	var center := data.world_center(cell)
-	center.x += rng.randf_range(-0.39, 0.39)
-	center.z += rng.randf_range(-0.39, 0.39)
 	center.y = data.elevation_at(cell) * STEP_HEIGHT + CAP_HEIGHT * 0.5 + 0.004
-	var scale := rng.randf_range(0.72, 1.18)
-	var rotation := rng.randf_range(0.0, TAU)
-	var basis := Basis(Vector3.UP, rotation).scaled(Vector3(scale, scale, scale))
-	grass_instances.set_instance_transform(index, Transform3D(basis, center))
-	var tint := rng.randf_range(0.86, 1.14)
-	grass_instances.set_instance_color(index, Color(tint, tint, tint, 1.0))
+	for tuft_index in range(GRASS_TUFTS_PER_HEX):
+		var instance_index := base_index + tuft_index
+		var rng := RandomNumberGenerator.new()
+		rng.seed = int(index * 92821 + tuft_index * 17431 + 3719)
+		if not is_grass or rng.randf() > 0.55:
+			grass_instances.set_instance_transform(instance_index, Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3.ZERO))
+			grass_instances.set_instance_color(instance_index, Color.WHITE)
+			continue
+		var tuft_center := center
+		tuft_center.x += rng.randf_range(-0.48, 0.48)
+		tuft_center.z += rng.randf_range(-0.42, 0.42)
+		var scale := rng.randf_range(0.92, 1.42)
+		var rotation := rng.randf_range(0.0, TAU)
+		var basis := Basis(Vector3.UP, rotation).scaled(Vector3(scale, scale, scale))
+		grass_instances.set_instance_transform(instance_index, Transform3D(basis, tuft_center))
+		var tint := rng.randf_range(0.82, 1.16)
+		grass_instances.set_instance_color(instance_index, Color(tint, tint, tint, 1.0))
 
 func _build_selection_outline() -> void:
 	var outline := ImmediateMesh.new()
@@ -320,10 +326,10 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 	rng.seed = int(cell.x * 73856093) ^ int(cell.y * 19349663) ^ int(edge * 83492791)
 	# Sparse cracks and moss add scale cues without rebuilding the face as columns.
 	var moss_colors: Array[Color] = [Color("4d6038"), Color("687748"), Color("78834d")]
-	var moss_count := clampi(ceili(edge_length * wall_height / 3.2), 1, 2)
+	var moss_count := clampi(ceili(edge_length * wall_height / 2.3), 2, 4)
 	for moss_index in range(moss_count):
 		var moss_t := rng.randf_range(0.14, 0.86)
-		var moss_width := rng.randf_range(0.04, 0.09)
+		var moss_width := rng.randf_range(0.055, 0.12)
 		var moss_y := top_y - rng.randf_range(0.04, minf(0.24, wall_height * 0.34))
 		var moss_a := edge_a.lerp(edge_b, moss_t - moss_width) + outward * 0.16
 		var moss_b := edge_a.lerp(edge_b, moss_t + moss_width) + outward * 0.16
@@ -333,14 +339,14 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 		moss_tip.y = minf(top_y + 0.02, moss_y + rng.randf_range(0.06, 0.14))
 		_add_side_triangle(surface, moss_a, moss_b, moss_tip, moss_colors[rng.randi_range(0, moss_colors.size() - 1)])
 
-	var fissure_count := clampi(ceili(wall_height / 3.5), 1, 2)
+	var fissure_count := clampi(ceili(wall_height / 2.6), 2, 4)
 	for fissure in range(fissure_count):
 		var t_center := rng.randf_range(0.15, 0.85)
 		var crack_length := minf(rng.randf_range(0.7, 1.5), wall_height * 0.78)
 		var crack_bottom := rng.randf_range(bottom_y, maxf(bottom_y, top_y - crack_length))
 		var crack_top := crack_bottom + crack_length
 		var drift := rng.randf_range(-0.18, 0.18)
-		var crack_width := rng.randf_range(0.012, 0.027)
+		var crack_width := rng.randf_range(0.016, 0.034)
 		var depth := outward * 0.19
 		var left_bottom := edge_a.lerp(edge_b, t_center - crack_width) + depth
 		var right_bottom := edge_a.lerp(edge_b, t_center + crack_width) + depth
@@ -364,8 +370,8 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 	)
 
 func _append_cliff_backing_grid(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, bottom_y: float, top_y: float, center: Vector3, outward: Vector3, tangent: Vector3) -> void:
-	var horizontal_segments := 8
-	var vertical_segments := clampi(ceili((top_y - bottom_y) / 0.36), 7, 14)
+	var horizontal_segments := 12
+	var vertical_segments := clampi(ceili((top_y - bottom_y) / 0.25), 10, 20)
 	var rows: Array = []
 	for y_step in range(vertical_segments + 1):
 		var height_ratio := float(y_step) / vertical_segments
@@ -403,18 +409,23 @@ func _cliff_vertex_breakup(point: Vector3, center: Vector3, outward: Vector3, ta
 	# Broad cellular forms create bulges; smaller noise shifts them sideways and vertically.
 	var broad := cliff_noise.get_noise_3d(point.x * 1.5, point.y * 0.8, point.z * 1.5)
 	var detail := cliff_noise.get_noise_3d((point.x + 17.3) * 3.2, (point.y - 4.1) * 2.2, (point.z + 9.7) * 3.2)
-	return (outward * (broad * 0.42 + detail * 0.18) + tangent * detail * 0.14 + Vector3.UP * broad * 0.09) * fade
+	var chips := cliff_noise.get_noise_3d((point.x - 8.1) * 7.5, (point.y + 2.7) * 5.4, (point.z + 13.6) * 7.5)
+	return (outward * (broad * 0.48 + detail * 0.28 + chips * 0.075) + tangent * (detail * 0.22 + chips * 0.10) + Vector3.UP * (broad * 0.12 + chips * 0.055)) * fade
 
 func _add_organic_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
+	var centroid := (a + b + c) / 3.0
+	var facet_noise := cliff_noise.get_noise_3d((centroid.x + 31.0) * 2.1, (centroid.y - 6.0) * 2.3, (centroid.z - 11.0) * 2.1)
+	var facet_step := roundf(clampf(0.5 + facet_noise * 0.52, 0.0, 1.0) * 5.0) / 5.0
+	var facet_color := Color("57452f").lerp(Color("b49a6c"), facet_step)
 	for point in [a, b, c]:
-		var color_noise := cliff_noise.get_noise_3d(point.x * 1.2, point.y * 1.2, point.z * 1.2)
-		var stone_color := Color("705b3b").lerp(Color("a89163"), clampf(0.52 + color_noise * 0.24, 0.0, 1.0))
+		var fleck := cliff_noise.get_noise_3d((point.x + 4.7) * 8.0, (point.y + 1.9) * 6.0, (point.z - 7.3) * 8.0)
+		var stone_color := facet_color.lerp(Color("c1a578"), clampf(0.08 + fleck * 0.08, 0.0, 0.16))
 		var edge_wobble := sin(point.x * 5.7 + point.z * 4.1) * 0.055
 		var blend_depth := maxf(0.24, 0.36 + edge_wobble)
 		var blend_t := clampf((cliff_blend_top_y - point.y) / blend_depth, 0.0, 1.0)
 		blend_t = blend_t * blend_t * (3.0 - 2.0 * blend_t)
 		var vertex_color := stone_color.lerp(cliff_blend_color, (1.0 - blend_t) * 0.84)
-		surface.set_smooth_group(0)
+		surface.set_smooth_group(-1)
 		surface.set_color(vertex_color)
 		surface.set_uv(Vector2((point.x + point.z) * 0.65, point.y * 0.55))
 		surface.add_vertex(point)
@@ -426,7 +437,7 @@ func _add_side_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3
 		var blend_t := clampf((cliff_blend_top_y - point.y) / blend_depth, 0.0, 1.0)
 		blend_t = blend_t * blend_t * (3.0 - 2.0 * blend_t)
 		var vertex_color := color.lerp(cliff_blend_color, (1.0 - blend_t) * 0.84)
-		surface.set_smooth_group(0)
+		surface.set_smooth_group(-1)
 		surface.set_color(vertex_color)
 		surface.set_uv(Vector2((point.x + point.z) * 0.65, point.y * 0.55))
 		surface.add_vertex(point)
