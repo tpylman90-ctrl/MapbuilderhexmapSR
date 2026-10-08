@@ -15,9 +15,13 @@ var cliff_node: MeshInstance3D
 var ledge_node: MeshInstance3D
 var selection_node: MeshInstance3D
 var selected_cell := Vector2i(-1, -1)
+var cliff_noise := FastNoiseLite.new()
 
 func initialize(grid_data: HexGrid) -> void:
 	data = grid_data
+	cliff_noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	cliff_noise.frequency = 1.4
+	cliff_noise.fractal_octaves = 2
 	_build_backing()
 	_build_tile_mesh()
 	_build_selection_outline()
@@ -61,11 +65,18 @@ func _make_hex_mesh() -> ArrayMesh:
 		var bottom_a := Vector3(cos(angle_a) * EDGE_RADIUS, bottom_y, sin(angle_a) * EDGE_RADIUS)
 		var bottom_b := Vector3(cos(angle_b) * EDGE_RADIUS, bottom_y, sin(angle_b) * EDGE_RADIUS)
 		# Winding is explicitly upward so the top remains visible in mobile renderers.
-		_add_triangle(surface, Vector3(0.0, top_y, 0.0), top_b, top_a, Color.WHITE)
+		_add_top_triangle(surface, Vector3(0.0, top_y, 0.0), top_b, top_a, Color.WHITE)
 		_add_triangle(surface, bottom_a, bottom_b, top_b, Color("b7b7b7"))
 		_add_triangle(surface, bottom_a, top_b, top_a, Color("b7b7b7"))
 	surface.generate_normals()
 	return surface.commit()
+
+func _add_top_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color) -> void:
+	var scale := 1.0 / (EDGE_RADIUS * 2.0)
+	for point in [a, b, c]:
+		surface.set_color(color)
+		surface.set_uv(Vector2(point.x * scale + 0.5, point.z * scale + 0.5))
+		surface.add_vertex(point)
 
 func _make_grid_outline_mesh() -> ArrayMesh:
 	var surface := SurfaceTool.new()
@@ -242,8 +253,8 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 	base_b.y = bottom_y
 	top_a.y = top_y
 	top_b.y = top_y
-	_add_triangle(surface, base_a, top_a, top_b, Color("353832"))
-	_add_triangle(surface, base_a, top_b, base_b, Color("292c27"))
+	_add_side_triangle(surface, base_a, top_a, top_b, Color("353832"))
+	_add_side_triangle(surface, base_a, top_b, base_b, Color("292c27"))
 
 	var rock_colors: Array[Color] = [
 		Color("3d403c"), Color("4a4c46"), Color("5d5b52"),
@@ -299,16 +310,23 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 			right_bottom.y += rng.randf_range(-0.07, 0.07) * bottom_fade
 			left_top.y += rng.randf_range(-0.07, 0.07) * top_fade
 			right_top.y += rng.randf_range(-0.07, 0.07) * top_fade
+			# Coherent radial breakup gives the large facets a natural rock profile.
+			# The fade locks the upper rim to the hex top so adjacent caps still meet.
+			left_bottom += _cliff_vertex_breakup(left_bottom, center, outward, bottom_fade)
+			right_bottom += _cliff_vertex_breakup(right_bottom, center, outward, bottom_fade)
+			left_top += _cliff_vertex_breakup(left_top, center, outward, top_fade)
+			right_top += _cliff_vertex_breakup(right_top, center, outward, top_fade)
+			ridge += _cliff_vertex_breakup(ridge, center, outward, ridge_fade)
 			var facet_colors: Array[Color] = []
 			for facet in range(4):
 				var facet_color: Color = rock_colors[rng.randi_range(0, rock_colors.size() - 1)]
 				if segment == vertical_segments - 1 and facet % 2 == 0:
 					facet_color = facet_color.lightened(0.08)
 				facet_colors.append(facet_color)
-			_add_triangle(surface, left_bottom, right_bottom, ridge, facet_colors[0])
-			_add_triangle(surface, right_bottom, right_top, ridge, facet_colors[1])
-			_add_triangle(surface, right_top, left_top, ridge, facet_colors[2])
-			_add_triangle(surface, left_top, left_bottom, ridge, facet_colors[3])
+			_add_side_triangle(surface, left_bottom, right_bottom, ridge, facet_colors[0])
+			_add_side_triangle(surface, right_bottom, right_top, ridge, facet_colors[1])
+			_add_side_triangle(surface, right_top, left_top, ridge, facet_colors[2])
+			_add_side_triangle(surface, left_top, left_bottom, ridge, facet_colors[3])
 			previous_center = next_center
 			previous_width = next_width
 			previous_depth = next_depth
@@ -326,7 +344,7 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 		moss_a.y = moss_y
 		moss_b.y = moss_y + rng.randf_range(-0.025, 0.025)
 		moss_tip.y = minf(top_y + 0.02, moss_y + rng.randf_range(0.05, 0.13))
-		_add_triangle(surface, moss_a, moss_b, moss_tip, moss_colors[rng.randi_range(0, moss_colors.size() - 1)])
+		_add_side_triangle(surface, moss_a, moss_b, moss_tip, moss_colors[rng.randi_range(0, moss_colors.size() - 1)])
 
 	# Tapered dark cracks cross the plates at irregular intervals.
 	var fissure_count := clampi(ceili(wall_height / 2.8), 1, 3)
@@ -346,8 +364,8 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 		right_bottom.y = crack_bottom
 		left_top.y = crack_top
 		right_top.y = crack_top
-		_add_triangle(surface, left_bottom, right_bottom, left_top, Color("30312c"))
-		_add_triangle(surface, right_bottom, right_top, left_top, Color("282923"))
+		_add_side_triangle(surface, left_bottom, right_bottom, left_top, Color("30312c"))
+		_add_side_triangle(surface, right_bottom, right_top, left_top, Color("282923"))
 
 	_append_cliff_lip(
 		ledge_surface,
@@ -358,6 +376,20 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 		HexGrid.TERRAIN_COLORS[data.terrain_at(cell)],
 		rng
 	)
+
+func _cliff_vertex_breakup(point: Vector3, center: Vector3, outward: Vector3, fade: float) -> Vector3:
+	var radial := Vector3(point.x - center.x, 0.0, point.z - center.z).normalized()
+	var broad_noise := cliff_noise.get_noise_3d(point.x, point.y * 0.72, point.z)
+	var fine_noise := cliff_noise.get_noise_3d(point.x + 19.7, point.y * 1.35, point.z - 8.3)
+	return (radial * broad_noise * 0.14 + outward * fine_noise * 0.07) * fade
+
+func _add_side_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color) -> void:
+	# Side UVs tile across the wall and rise with elevation, avoiding one stretched
+	# hex-wide mapping on tall cliffs. The shader can use this for vertical strata.
+	for point in [a, b, c]:
+		surface.set_color(color)
+		surface.set_uv(Vector2((point.x + point.z) * 0.65, point.y * 0.55))
+		surface.add_vertex(point)
 
 func _append_cliff_lip(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, outward: Vector3, top_y: float, color: Color, rng: RandomNumberGenerator) -> void:
 	var divisions := 5
