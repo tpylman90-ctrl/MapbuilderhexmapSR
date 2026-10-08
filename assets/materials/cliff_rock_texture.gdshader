@@ -4,8 +4,8 @@ render_mode diffuse_burley, specular_schlick_ggx, cull_disabled;
 uniform float macro_scale = 0.62;
 uniform float detail_scale = 2.8;
 uniform float grain_scale = 8.0;
-uniform float texture_strength = 0.24;
-uniform float strata_strength = 0.16;
+uniform float texture_strength = 0.32;
+uniform float strata_strength = 0.24;
 
 float hash3(vec3 p) {
 	p = fract(p * 0.1031);
@@ -42,9 +42,9 @@ void fragment() {
 	float strata = value_noise(vec3(UV.x * 3.4, UV.y * 0.24, 0.0));
 
 	float broad_tone = mix(1.0 - texture_strength, 1.0 + texture_strength, broad);
-	float detail_tone = mix(0.92, 1.08, detail);
+	float detail_tone = mix(0.88, 1.12, detail);
 	float grain_tone = mix(0.97, 1.03, grain);
-	vec3 stone_tint = mix(vec3(0.78, 0.82, 0.79), vec3(1.04, 1.00, 0.92), broad);
+	vec3 stone_tint = mix(vec3(0.90, 0.77, 0.57), vec3(1.08, 1.00, 0.82), broad);
 	float strata_tone = mix(1.0 - strata_strength, 1.0 + strata_strength, strata);
 
 	ALBEDO = COLOR.rgb * stone_tint * broad_tone * detail_tone * grain_tone * strata_tone;

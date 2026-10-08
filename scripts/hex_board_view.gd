@@ -213,7 +213,7 @@ func _rebuild_cliffs() -> void:
 				cliff_count += 1
 	if cliff_count == 0:
 		return
-	surface.index()
+	# Keep the triangulated rock planes flat shaded for a hand-cut low-poly look.
 	surface.generate_normals()
 	cliff_node = MeshInstance3D.new()
 	cliff_node.name = "AutoCliffFaces"
@@ -300,8 +300,8 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 	)
 
 func _append_cliff_backing_grid(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, bottom_y: float, top_y: float, center: Vector3, outward: Vector3, tangent: Vector3) -> void:
-	var horizontal_segments := 10
-	var vertical_segments := clampi(ceili((top_y - bottom_y) / 0.27), 8, 16)
+	var horizontal_segments := 8
+	var vertical_segments := clampi(ceili((top_y - bottom_y) / 0.36), 7, 14)
 	var rows: Array = []
 	for y_step in range(vertical_segments + 1):
 		var height_ratio := float(y_step) / vertical_segments
@@ -339,12 +339,12 @@ func _cliff_vertex_breakup(point: Vector3, center: Vector3, outward: Vector3, ta
 	# Broad cellular forms create bulges; smaller noise shifts them sideways and vertically.
 	var broad := cliff_noise.get_noise_3d(point.x * 1.5, point.y * 0.8, point.z * 1.5)
 	var detail := cliff_noise.get_noise_3d((point.x + 17.3) * 3.2, (point.y - 4.1) * 2.2, (point.z + 9.7) * 3.2)
-	return (outward * (broad * 0.34 + detail * 0.14) + tangent * detail * 0.11 + Vector3.UP * broad * 0.07) * fade
+	return (outward * (broad * 0.42 + detail * 0.18) + tangent * detail * 0.14 + Vector3.UP * broad * 0.09) * fade
 
 func _add_organic_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
 	for point in [a, b, c]:
 		var color_noise := cliff_noise.get_noise_3d(point.x * 1.2, point.y * 1.2, point.z * 1.2)
-		var stone_color := Color("454943").lerp(Color("716c60"), clampf(0.44 + color_noise * 0.40, 0.0, 1.0))
+		var stone_color := Color("514936").lerp(Color("b39b63"), clampf(0.48 + color_noise * 0.46, 0.0, 1.0))
 		var edge_wobble := sin(point.x * 5.7 + point.z * 4.1) * 0.055
 		var blend_depth := maxf(0.24, 0.36 + edge_wobble)
 		var blend_t := clampf((cliff_blend_top_y - point.y) / blend_depth, 0.0, 1.0)
@@ -368,11 +368,11 @@ func _add_side_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3
 		surface.add_vertex(point)
 
 func _append_cliff_lip(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, outward: Vector3, top_y: float, color: Color, rng: RandomNumberGenerator) -> void:
-	var divisions := 7
+	var divisions := 8
 	var previous_outer := Vector3.ZERO
 	for segment in range(divisions + 1):
 		var edge_t := float(segment) / divisions
-		var width := rng.randf_range(0.26, 0.38)
+		var width := rng.randf_range(0.30, 0.44)
 		var drop := tan(deg_to_rad(27.0)) * width
 		var inner := edge_a.lerp(edge_b, edge_t)
 		inner.y = top_y + 0.006
