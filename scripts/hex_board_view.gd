@@ -4,7 +4,7 @@ extends Node3D
 const CAP_HEIGHT: float = 0.18
 const EDGE_RADIUS: float = HexGrid.HEX_RADIUS * 0.99
 const STEP_HEIGHT: float = HexGrid.HEIGHT_PER_LEVEL
-const GRASS_TUFTS_PER_HEX: int = 4
+const GRASS_TUFTS_PER_HEX: int = 6
 const SELECT_COLOR := Color("efcf78")
 
 var data: HexGrid
@@ -54,11 +54,11 @@ func _build_backing() -> void:
 	environment.background_color = Color("98aaa2")
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color("c7c9b3")
-	environment.ambient_light_energy = 0.43
-	environment.tonemap_exposure = 0.95
+	environment.ambient_light_energy = 0.35
+	environment.tonemap_exposure = 0.86
 	environment.fog_enabled = true
 	environment.fog_light_color = Color("a9bdb1")
-	environment.fog_light_energy = 0.78
+	environment.fog_light_energy = 0.66
 	environment.fog_sky_affect = 0.14
 	environment.fog_mode = Environment.FOG_MODE_DEPTH
 	environment.fog_depth_begin = 48.0
@@ -358,17 +358,17 @@ func _build_grass_instances() -> void:
 func _make_grass_tuft_mesh() -> ArrayMesh:
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var blade_colors: Array[Color] = [Color("65983e"), Color("82b247"), Color("a4c95b"), Color("719d3e"), Color("90b94b")]
-	for blade in range(7):
-		var angle := TAU * float(blade) / 7.0 + float(blade % 2) * 0.19
+	var blade_colors: Array[Color] = [Color("557d38"), Color("719644"), Color("91ad50"), Color("63863a"), Color("819e48"), Color("a0b65b")]
+	for blade in range(9):
+		var angle := TAU * float(blade) / 9.0 + float(blade % 2) * 0.19
 		var direction := Vector3(cos(angle), 0.0, sin(angle))
 		var side := Vector3(-direction.z, 0.0, direction.x)
-		var height := 0.30 + float((blade * 7) % 5) * 0.045
-		var width := 0.048 + float(blade % 3) * 0.012
+		var height := 0.26 + float((blade * 7) % 6) * 0.048
+		var width := 0.036 + float(blade % 4) * 0.009
 		var base_left := -side * width
 		var base_right := side * width
-		var middle := direction * 0.09 + Vector3.UP * height * 0.52
-		var tip := direction * 0.16 + Vector3.UP * height
+		var middle := direction * 0.07 + Vector3.UP * height * 0.48
+		var tip := direction * (0.12 + float(blade % 3) * 0.025) + Vector3.UP * height
 		var color := blade_colors[blade % blade_colors.size()]
 		_add_colored_triangle(surface, base_left, base_right, middle, color.darkened(0.12), color.darkened(0.08), color)
 		_add_colored_triangle(surface, base_right, tip, middle, color.darkened(0.08), color.lightened(0.06), color)
@@ -389,14 +389,14 @@ func _refresh_grass_cell(cell: Vector2i, index: int) -> void:
 		var instance_index := base_index + tuft_index
 		var rng := RandomNumberGenerator.new()
 		rng.seed = int(index * 92821 + tuft_index * 17431 + 3719)
-		if not is_grass or rng.randf() > 0.64:
+		if not is_grass or rng.randf() > 0.58:
 			grass_instances.set_instance_transform(instance_index, Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), Vector3.ZERO))
 			grass_instances.set_instance_color(instance_index, Color.WHITE)
 			continue
 		var tuft_center := center
 		tuft_center.x += rng.randf_range(-0.48, 0.48)
 		tuft_center.z += rng.randf_range(-0.42, 0.42)
-		var scale := rng.randf_range(0.84, 1.38)
+		var scale := rng.randf_range(0.72, 1.42)
 		var rotation := rng.randf_range(0.0, TAU)
 		var basis := Basis(Vector3.UP, rotation).scaled(Vector3(scale, scale, scale))
 		grass_instances.set_instance_transform(instance_index, Transform3D(basis, tuft_center))
