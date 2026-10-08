@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode diffuse_toon, specular_disabled, cull_disabled;
 
-uniform vec3 cliff_color : source_color = vec3(0.70, 0.60, 0.45);
+uniform vec3 cliff_color : source_color = vec3(0.62, 0.50, 0.34);
 uniform float slope_threshold : hint_range(0.0, 1.0) = 0.68;
 uniform float blend_sharpness : hint_range(0.0, 0.2) = 0.04;
 
@@ -37,8 +37,8 @@ void fragment() {
 	// Broad color blocks follow the hand-built facets; low crevice values fake contact shade
 	// on the Mobile renderer, where screen-space ambient occlusion is unavailable.
 	float broad_facet = value_noise(world_position * vec3(0.75, 0.38, 0.75));
-	float crevice_shade = mix(0.78, 1.08, broad_facet);
-	vec3 vertex_stone = mix(cliff_color, COLOR.rgb, 0.48);
+	float crevice_shade = mix(0.88, 1.08, broad_facet);
+	vec3 vertex_stone = mix(cliff_color, COLOR.rgb, 0.25);
 	vec3 faceted_rock = vertex_stone * crevice_shade;
 	vec3 upper_edge = COLOR.rgb * mix(0.96, 1.04, broad_facet);
 	ALBEDO = mix(faceted_rock, upper_edge, top_blend * 0.65);

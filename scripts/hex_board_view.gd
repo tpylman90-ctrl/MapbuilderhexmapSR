@@ -21,10 +21,10 @@ var cliff_blend_color := Color.WHITE
 
 func initialize(grid_data: HexGrid) -> void:
 	data = grid_data
-	cliff_noise.noise_type = FastNoiseLite.TYPE_CELLULAR
-	cliff_noise.frequency = 0.42
+	cliff_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	cliff_noise.frequency = 0.34
 	cliff_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
-	cliff_noise.fractal_octaves = 3
+	cliff_noise.fractal_octaves = 2
 	_build_backing()
 	_build_tile_mesh()
 	_build_selection_outline()
@@ -37,7 +37,7 @@ func _build_backing() -> void:
 	environment.background_color = Color("101813")
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color("c5bea8")
-	environment.ambient_light_energy = 0.48
+	environment.ambient_light_energy = 0.30
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
 	world.environment = environment
 	add_child(world)
@@ -345,7 +345,7 @@ func _cliff_vertex_breakup(point: Vector3, center: Vector3, outward: Vector3, ta
 func _add_organic_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
 	for point in [a, b, c]:
 		var color_noise := cliff_noise.get_noise_3d(point.x * 1.2, point.y * 1.2, point.z * 1.2)
-		var stone_color := Color("514936").lerp(Color("b39b63"), clampf(0.48 + color_noise * 0.46, 0.0, 1.0))
+		var stone_color := Color("705b3b").lerp(Color("a89163"), clampf(0.52 + color_noise * 0.24, 0.0, 1.0))
 		var edge_wobble := sin(point.x * 5.7 + point.z * 4.1) * 0.055
 		var blend_depth := maxf(0.24, 0.36 + edge_wobble)
 		var blend_t := clampf((cliff_blend_top_y - point.y) / blend_depth, 0.0, 1.0)
