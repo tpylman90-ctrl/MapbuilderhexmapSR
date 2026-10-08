@@ -91,15 +91,14 @@ func _run() -> void:
 	var shore_neighbor := grid.neighbor_for_edge(water_cell, shoreline_edge)
 	grid.set_terrain(shore_neighbor, HexGrid.Terrain.GRASS)
 	board_view.refresh_cell(water_cell)
-	var shoreline_instances := board_view.get("shoreline_instances") as MultiMesh
+	var shoreline_edges: Dictionary = board_view.get("shoreline_edges")
 	var shoreline_index := grid.index_of(water_cell) * 6 + shoreline_edge
-	if shoreline_instances == null or shoreline_instances.get_instance_transform(shoreline_index).origin.y < HexGrid.MIN_ELEVATION * HexGrid.HEIGHT_PER_LEVEL - 1.0:
+	if not shoreline_edges.has(shoreline_index):
 		_fail("Water-ground edge did not receive a shoreline highlight")
 		return
 	grid.set_terrain(shore_neighbor, HexGrid.Terrain.WATER)
 	board_view.refresh_cell(shore_neighbor)
-	var hidden_y := shoreline_instances.get_instance_transform(shoreline_index).origin.y
-	if hidden_y > HexGrid.MIN_ELEVATION * HexGrid.HEIGHT_PER_LEVEL - 1.0:
+	if shoreline_edges.has(shoreline_index):
 		_fail("Internal water-water edges should not render shoreline foam")
 		return
 	var low_vertex_count := (water_instances.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()

@@ -18,7 +18,8 @@ var water_node: MultiMeshInstance3D
 var water_shader_material: ShaderMaterial
 var water_subdivisions: int = 4
 var water_flow_direction := Vector2(0.707107, 0.707107)
-var shoreline_instances: MultiMesh
+var shoreline_edges: Dictionary = {}
+var _shoreline_rebuild_queued := false
 var shoreline_node: MultiMeshInstance3D
 var shoreline_shader_material: ShaderMaterial
 var _refreshing_all := false
@@ -147,7 +148,7 @@ func _build_tile_mesh() -> void:
 	add_child(grid_node)
 	_build_grass_instances()
 	_build_water_instances()
-	_build_shoreline_instances()
+	_build_shoreline_node()
 
 	var outlines := MultiMesh.new()
 	outlines.transform_format = MultiMesh.TRANSFORM_3D
@@ -205,34 +206,81 @@ func set_water_flow_direction(direction: Vector2) -> void:
 	if shoreline_shader_material != null:
 		shoreline_shader_material.set_shader_parameter("flow_direction", water_flow_direction)
 
-func _build_shoreline_instances() -> void:
-	shoreline_instances = MultiMesh.new()
-	shoreline_instances.transform_format = MultiMesh.TRANSFORM_3D
-	shoreline_instances.mesh = _make_shoreline_strip_mesh()
-	shoreline_instances.instance_count = HexGrid.COLUMNS * HexGrid.ROWS * 6
-	shoreline_node = MultiMeshInstance3D.new()
+func _build_shoreline_node() -> void:
+	shoreline_node = MeshInstance3D.new()
 	shoreline_node.name = "WaterGroundShoreline"
-	shoreline_node.multimesh = shoreline_instances
 	shoreline_shader_material = ShaderMaterial.new()
 	shoreline_shader_material.shader = load("res://assets/materials/water_shoreline.gdshader") as Shader
 	shoreline_shader_material.set_shader_parameter("flow_direction", water_flow_direction)
 	shoreline_node.material_override = shoreline_shader_material
 	add_child(shoreline_node)
 
-func _make_shoreline_strip_mesh() -> ArrayMesh:
+func _refresh_shorelines_around(cell: Vector2i) -> void:
+	_refresh_shoreline_cell(cell)
+	for edge in range(6):
+		var neighbor := data.neighbor_for_edge(cell, edge)
+		if data.contains(neighbor):
+			_refresh_shoreline_cell(neighbor)
+
+func _refresh_shoreline_cell(cell: Vector2i) -> void:
+	if shoreline_node == null or not data.contains(cell):
+		return
+	var index := data.index_of(cell)
+	var is_water := data.terrain_at(cell) == HexGrid.Terrain.WATER
+	var changed := false
+	for edge in range(6):
+		var neighbor := data.neighbor_for_edge(cell, edge)
+		var meets_ground := not data.contains(neighbor) or data.terrain_at(neighbor) != HexGrid.Terrain.WATER
+		var instance_index := index * 6 + edge
+		var is_shore := is_water and meets_ground
+		if is_shore and not shoreline_edges.has(instance_index):
+			shoreline_edges[instance_index] = true
+			changed = true
+		elif not is_shore and shoreline_edges.has(instance_index):
+			shoreline_edges.erase(instance_index)
+			changed = true
+	if changed and not _refreshing_all:
+		_queue_shoreline_rebuild()
+
+func _queue_shoreline_rebuild() -> void:
+	if _shoreline_rebuild_queued:
+		return
+	_shoreline_rebuild_queued = true
+	call_deferred("_rebuild_shoreline_mesh")
+
+func _rebuild_shoreline_mesh() -> void:
+	_shoreline_rebuild_queued = false
+	if shoreline_node == null:
+		return
+	if shoreline_edges.is_empty():
+		shoreline_node.mesh = null
+		return
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var half_length := EDGE_RADIUS * 0.5
-	var apothem := EDGE_RADIUS * cos(PI / 6.0)
-	var outer_z := -apothem + 0.012
-	var inner_z := -apothem + 0.135
-	var a := Vector3(-half_length, 0.0, outer_z)
-	var b := Vector3(half_length, 0.0, outer_z)
-	var c := Vector3(half_length, 0.0, inner_z)
-	var d := Vector3(-half_length, 0.0, inner_z)
-	_add_shoreline_triangle(surface, a, b, c, Vector2(0.0, 0.0), Vector2(1.0, 0.0), Vector2(1.0, 1.0))
-	_add_shoreline_triangle(surface, a, c, d, Vector2(0.0, 0.0), Vector2(1.0, 1.0), Vector2(0.0, 1.0))
-	return surface.commit()
+	for instance_index in shoreline_edges:
+		var cell_index := floori(float(instance_index) / 6.0)
+		var edge := int(instance_index) % 6
+		_append_shoreline_edge(surface, data.cell_from_index(cell_index), edge)
+	surface.generate_normals()
+	shoreline_node.mesh = surface.commit()
+
+func _append_shoreline_edge(surface: SurfaceTool, cell: Vector2i, edge: int) -> void:
+	var center := data.world_center(cell)
+	var angle_a := deg_to_rad(30.0 + 60.0 * edge)
+	var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
+	var edge_a := Vector3(center.x + cos(angle_a) * EDGE_RADIUS, 0.0, center.z + sin(angle_a) * EDGE_RADIUS)
+	var edge_b := Vector3(center.x + cos(angle_b) * EDGE_RADIUS, 0.0, center.z + sin(angle_b) * EDGE_RADIUS)
+	var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
+	var inward := Vector3(-cos(middle_angle), 0.0, -sin(middle_angle))
+	var top_y := data.elevation_at(cell) * STEP_HEIGHT + CAP_HEIGHT * 0.5 + 0.026
+	edge_a.y = top_y
+	edge_b.y = top_y
+	var inner_a := edge_a + inward * 0.135
+	var inner_b := edge_b + inward * 0.135
+	var outer_a := edge_a + inward * 0.012
+	var outer_b := edge_b + inward * 0.012
+	_add_shoreline_triangle(surface, outer_a, outer_b, inner_b, Vector2(0.0, 0.0), Vector2(1.0, 0.0), Vector2(1.0, 1.0))
+	_add_shoreline_triangle(surface, outer_a, inner_b, inner_a, Vector2(0.0, 0.0), Vector2(1.0, 1.0), Vector2(0.0, 1.0))
 
 func _add_shoreline_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, uv_a: Vector2, uv_b: Vector2, uv_c: Vector2) -> void:
 	surface.set_normal(Vector3.UP)
@@ -244,31 +292,6 @@ func _add_shoreline_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Ve
 	surface.set_normal(Vector3.UP)
 	surface.set_uv(uv_c)
 	surface.add_vertex(c)
-
-func _refresh_shorelines_around(cell: Vector2i) -> void:
-	_refresh_shoreline_cell(cell)
-	for edge in range(6):
-		var neighbor := data.neighbor_for_edge(cell, edge)
-		if data.contains(neighbor):
-			_refresh_shoreline_cell(neighbor)
-
-func _refresh_shoreline_cell(cell: Vector2i) -> void:
-	if shoreline_instances == null or not data.contains(cell):
-		return
-	var index := data.index_of(cell)
-	var center := data.world_center(cell)
-	center.y = data.elevation_at(cell) * STEP_HEIGHT + CAP_HEIGHT * 0.5 + 0.026
-	var is_water := data.terrain_at(cell) == HexGrid.Terrain.WATER
-	for edge in range(6):
-		var neighbor := data.neighbor_for_edge(cell, edge)
-		var meets_ground := not data.contains(neighbor) or data.terrain_at(neighbor) != HexGrid.Terrain.WATER
-		var is_shore := is_water and meets_ground
-		var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
-		var origin := center
-		if not is_shore:
-			origin.y = HexGrid.MIN_ELEVATION * STEP_HEIGHT - 3.0
-		var transform := Transform3D(Basis(Vector3.UP, PI * 0.5 - middle_angle), origin)
-		shoreline_instances.set_instance_transform(index * 6 + edge, transform)
 
 func _make_water_hex_mesh(subdivisions: int) -> ArrayMesh:
 	var surface := SurfaceTool.new()
@@ -399,11 +422,13 @@ func _build_selection_outline() -> void:
 
 func refresh_all() -> void:
 	_refreshing_all = true
+	shoreline_edges.clear()
 	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
 		refresh_cell(data.cell_from_index(index))
-	_refreshing_all = false
 	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
 		_refresh_shoreline_cell(data.cell_from_index(index))
+	_refreshing_all = false
+	_rebuild_shoreline_mesh()
 	_rebuild_cliffs()
 	_update_selection()
 
