@@ -9,6 +9,7 @@ on:
       - "export_presets.cfg"
       - "scenes/**"
       - "scripts/**"
+      - "tests/**"
       - "assets/**"
       - ".github/workflows/android-apk.yml"
   pull_request:
@@ -17,6 +18,7 @@ on:
       - "export_presets.cfg"
       - "scenes/**"
       - "scripts/**"
+      - "tests/**"
       - "assets/**"
       - ".github/workflows/android-apk.yml"
 
@@ -84,6 +86,23 @@ jobs:
           fi
           if [ "$GODOT_EXIT" -ne 0 ]; then
             echo "Main scene smoke test exited with code $GODOT_EXIT."
+            exit "$GODOT_EXIT"
+          fi
+
+      - name: Test map builder workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          timeout 120 "$GODOT_BIN" --headless --path "$GITHUB_WORKSPACE" --script "res://tests/map_builder_roundtrip.gd" 2>&1 | tee "$RUNNER_TEMP/map-builder-workflows.log"
+          GODOT_EXIT=${PIPESTATUS[0]}
+          set -e
+          if grep -E "SCRIPT ERROR:|Parse Error:|Failed to load script" "$RUNNER_TEMP/map-builder-workflows.log"; then
+            echo "Map builder workflow test reported an error."
+            exit 1
+          fi
+          if [ "$GODOT_EXIT" -ne 0 ]; then
+            echo "Map builder workflow test exited with code $GODOT_EXIT."
             exit "$GODOT_EXIT"
           fi
 

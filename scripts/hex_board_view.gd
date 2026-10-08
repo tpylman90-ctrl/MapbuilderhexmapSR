@@ -11,6 +11,11 @@ var data: HexGrid
 var tile_instances: MultiMesh
 var grid_node: MultiMeshInstance3D
 var grass_instances: MultiMesh
+var grass_node: MultiMeshInstance3D
+var terrain_shader_material: ShaderMaterial
+var cliff_shader_material: ShaderMaterial
+var surface_detail_strength: float = 0.78
+var cliff_detail_strength: float = 0.82
 var outline_instances: MultiMesh
 var outline_node: MultiMeshInstance3D
 var cliff_node: MeshInstance3D
@@ -112,9 +117,10 @@ func _build_tile_mesh() -> void:
 	grid_node = MultiMeshInstance3D.new()
 	grid_node.name = "HexGrid64x128"
 	grid_node.multimesh = tile_instances
-	var material := ShaderMaterial.new()
-	material.shader = load("res://assets/materials/terrain_surface.gdshader") as Shader
-	grid_node.material_override = material
+	terrain_shader_material = ShaderMaterial.new()
+	terrain_shader_material.shader = load("res://assets/materials/terrain_surface.gdshader") as Shader
+	terrain_shader_material.set_shader_parameter("surface_detail", surface_detail_strength)
+	grid_node.material_override = terrain_shader_material
 	add_child(grid_node)
 	_build_grass_instances()
 
@@ -148,6 +154,7 @@ func _build_grass_instances() -> void:
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	node.material_override = material
 	add_child(node)
+	grass_node = node
 	grass_instances = instances
 
 func _make_grass_tuft_mesh() -> ArrayMesh:
@@ -250,6 +257,7 @@ func _rebuild_cliffs() -> void:
 	if cliff_node != null:
 		cliff_node.queue_free()
 		cliff_node = null
+	cliff_shader_material = null
 	if ledge_node != null:
 		ledge_node.queue_free()
 		ledge_node = null
@@ -288,9 +296,10 @@ func _rebuild_cliffs() -> void:
 	cliff_node = MeshInstance3D.new()
 	cliff_node.name = "AutoCliffFaces"
 	cliff_node.mesh = surface.commit()
-	var material := ShaderMaterial.new()
-	material.shader = load("res://assets/materials/cliff_rock_texture.gdshader") as Shader
-	cliff_node.material_override = material
+	cliff_shader_material = ShaderMaterial.new()
+	cliff_shader_material.shader = load("res://assets/materials/cliff_rock_texture.gdshader") as Shader
+	cliff_shader_material.set_shader_parameter("rock_detail", cliff_detail_strength)
+	cliff_node.material_override = cliff_shader_material
 	add_child(cliff_node)
 
 	ledge_surface.generate_normals()
@@ -460,6 +469,16 @@ func _append_cliff_lip(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, o
 			_add_gradient_triangle(surface, previous_inner, inner, outer, color, color, faded_color)
 			_add_gradient_triangle(surface, previous_inner, outer, previous_outer, color, faded_color, faded_color)
 		previous_outer = outer
+
+func set_surface_detail(value: float) -> void:
+	surface_detail_strength = clampf(value, 0.0, 1.0)
+	if terrain_shader_material != null:
+		terrain_shader_material.set_shader_parameter("surface_detail", surface_detail_strength)
+
+func set_cliff_detail(value: float) -> void:
+	cliff_detail_strength = clampf(value, 0.0, 1.0)
+	if cliff_shader_material != null:
+		cliff_shader_material.set_shader_parameter("rock_detail", cliff_detail_strength)
 
 func refresh_cliffs() -> void:
 	_rebuild_cliffs()

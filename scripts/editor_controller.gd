@@ -34,12 +34,27 @@ var _syncing_camera_controls: bool = false
 var fill_dialog: ConfirmationDialog
 var _last_stroke_cell := INVALID_CELL
 var _flatten_level: int = 0
-var _tool_group := ButtonGroup.new()
+var _sculpt_group := ButtonGroup.new()
+var _terrain_group := ButtonGroup.new()
+var _object_group := ButtonGroup.new()
 var _sculpt_buttons: Array[Button] = []
 var _terrain_buttons: Array[Button] = []
 var _sample_button: Button
 var _placeable_button: Button
+var _object_buttons: Array[Button] = []
 var _placed_objects: Array[Node3D] = []
+var _active_object_type := "house"
+var _object_rotation_degrees := 0.0
+var _object_scale := 1.0
+var _generation_preset := "island"
+var _save_dialog: FileDialog
+var _load_dialog: FileDialog
+var _load_confirmation: ConfirmationDialog
+var _pending_load_path := ""
+var _new_map_dialog: ConfirmationDialog
+var _generation_dialog: ConfirmationDialog
+var _outline_node: MultiMeshInstance3D
+var _grass_node: MultiMeshInstance3D
 var pan_mode: bool = false
 var _pointer_active: bool = false
 var _pointer_pan: bool = false
@@ -57,6 +72,8 @@ func _ready() -> void:
 	board_view.name = "BoardView"
 	add_child(board_view)
 	board_view.initialize(grid)
+	_outline_node = board_view.outline_node
+	_grass_node = board_view.grass_node
 	board_view.set_selected(selected_cell)
 	_build_editor_ui()
 	_update_readout()
@@ -70,26 +87,27 @@ func _build_editor_ui() -> void:
 	panel.anchor_bottom = 1.0
 	panel.offset_left = 8.0
 	panel.offset_top = 8.0
-	panel.offset_right = 252.0
+	panel.offset_right = 270.0
 	panel.offset_bottom = -8.0
 	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.055, 0.065, 0.058, 0.96)
+	panel_style.bg_color = Color(0.055, 0.065, 0.058, 0.97)
 	panel_style.border_color = Color("806f50")
 	panel_style.set_border_width_all(1)
 	panel_style.set_corner_radius_all(10)
-	panel_style.content_margin_left = 12.0
-	panel_style.content_margin_right = 12.0
-	panel_style.content_margin_top = 10.0
-	panel_style.content_margin_bottom = 10.0
+	panel_style.content_margin_left = 10.0
+	panel_style.content_margin_right = 10.0
+	panel_style.content_margin_top = 9.0
+	panel_style.content_margin_bottom = 9.0
 	panel.add_theme_stylebox_override("panel", panel_style)
 	layer.add_child(panel)
+
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
 	var content := VBoxContainer.new()
-	content.custom_minimum_size.x = 214.0
-	content.add_theme_constant_override("separation", 8)
+	content.custom_minimum_size.x = 236.0
+	content.add_theme_constant_override("separation", 7)
 	scroll.add_child(content)
 
 	var title := Label.new()
@@ -99,20 +117,31 @@ func _build_editor_ui() -> void:
 	content.add_child(title)
 	var board_label := Label.new()
 	board_label.text = "64 × 128  •  8,192 hexes"
+	board_label.add_theme_color_override("font_color", Color("e0e3da"))
 	content.add_child(board_label)
 	content.add_child(HSeparator.new())
 
-	var sculpt_label := Label.new()
-	sculpt_label.text = "SCULPT"
-	sculpt_label.add_theme_color_override("font_color", Color("c7b785"))
-	content.add_child(sculpt_label)
+	var tabs := TabContainer.new()
+	tabs.name = "ToolSections"
+	tabs.custom_minimum_size = Vector2(236.0, 420.0)
+	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(tabs)
+
+	var terrain_page := VBoxContainer.new()
+	terrain_page.name = "Terrain"
+	terrain_page.add_theme_constant_override("separation", 7)
+	tabs.add_child(terrain_page)
+	_add_section_title(terrain_page, "SCULPT")
 	var sculpt_grid := GridContainer.new()
 	sculpt_grid.columns = 2
 	sculpt_grid.add_theme_constant_override("h_separation", 6)
 	sculpt_grid.add_theme_constant_override("v_separation", 6)
-	content.add_child(sculpt_grid)
+	terrain_page.add_child(sculpt_grid)
 	_sculpt_buttons.clear()
-	_tool_group.allow_unpress = false
+	_sculpt_group.allow_unpress = false
+	_terrain_group.allow_unpress = false
+	_object_group.allow_unpress = false
 	_add_sculpt_button(sculpt_grid, "Raise", ElevationTool.RAISE)
 	_add_sculpt_button(sculpt_grid, "Lower", ElevationTool.LOWER)
 	_add_sculpt_button(sculpt_grid, "Flatten", ElevationTool.FLATTEN)
@@ -120,34 +149,27 @@ func _build_editor_ui() -> void:
 	_add_sculpt_button(sculpt_grid, "Hill", ElevationTool.HILL)
 	_add_sculpt_button(sculpt_grid, "Ridge", ElevationTool.RIDGE)
 
-	var brush_label := Label.new()
-	brush_label.text = "BRUSH SIZE"
-	brush_label.add_theme_color_override("font_color", Color("c7b785"))
-	content.add_child(brush_label)
+	_add_section_title(terrain_page, "BRUSH SIZE")
 	var brush_picker := OptionButton.new()
-	brush_picker.custom_minimum_size.y = 42.0
+	brush_picker.custom_minimum_size.y = 40.0
 	for size in range(1, 9):
 		brush_picker.add_item(str(size) + (" hex" if size == 1 else " hexes"), size)
 	brush_picker.select(0)
 	brush_picker.item_selected.connect(func(index: int): brush_size = index + 1)
-	content.add_child(brush_picker)
+	terrain_page.add_child(brush_picker)
 
-	content.add_child(HSeparator.new())
-	var terrain_label := Label.new()
-	terrain_label.text = "GROUND TYPE"
-	terrain_label.add_theme_color_override("font_color", Color("c7b785"))
-	content.add_child(terrain_label)
+	_add_section_title(terrain_page, "GROUND PALETTE")
 	var terrain_grid := GridContainer.new()
 	terrain_grid.columns = 2
 	terrain_grid.add_theme_constant_override("h_separation", 6)
 	terrain_grid.add_theme_constant_override("v_separation", 6)
-	content.add_child(terrain_grid)
+	terrain_page.add_child(terrain_grid)
 	_terrain_buttons.clear()
 	for terrain in range(HexGrid.TERRAIN_NAMES.size()):
 		var terrain_id := terrain
 		var terrain_button := _make_button(terrain_grid, HexGrid.TERRAIN_NAMES[terrain], func(): _set_ground_tool(terrain_id))
 		terrain_button.toggle_mode = true
-		terrain_button.button_group = _tool_group
+		terrain_button.button_group = _terrain_group
 		terrain_button.toggled.connect(func(pressed: bool):
 			if pressed:
 				_set_ground_tool(terrain_id)
@@ -156,33 +178,114 @@ func _build_editor_ui() -> void:
 		_terrain_buttons.append(terrain_button)
 	_terrain_buttons[HexGrid.Terrain.GRASS].button_pressed = true
 
-	content.add_child(HSeparator.new())
-	var placeable_label := Label.new()
-	placeable_label.text = "PLACEABLES"
-	placeable_label.add_theme_color_override("font_color", Color("c7b785"))
-	content.add_child(placeable_label)
-	var placeable_row := HBoxContainer.new()
-	content.add_child(placeable_row)
-	_placeable_button = _make_button(placeable_row, "Cartoon House", _set_house_place_tool)
-	_placeable_button.toggle_mode = true
-	_placeable_button.button_group = _tool_group
-
 	var ground_actions := HBoxContainer.new()
-	content.add_child(ground_actions)
+	terrain_page.add_child(ground_actions)
 	_sample_button = _make_button(ground_actions, "Sample", func(): _set_sample_tool())
 	_sample_button.toggle_mode = true
-	_sample_button.button_group = _tool_group
+	_sample_button.button_group = _terrain_group
 	_sample_button.toggled.connect(func(pressed: bool):
 		if pressed:
 			_set_sample_tool()
 	)
-	_make_button(ground_actions, "Fill board…", func(): _confirm_fill_ground())
+	_make_button(ground_actions, "Fill all…", _confirm_fill_ground)
+
+	var objects_page := VBoxContainer.new()
+	objects_page.name = "Objects"
+	objects_page.add_theme_constant_override("separation", 7)
+	tabs.add_child(objects_page)
+	_add_section_title(objects_page, "OBJECT STAMPS")
+	var object_grid := GridContainer.new()
+	object_grid.columns = 2
+	object_grid.add_theme_constant_override("h_separation", 6)
+	object_grid.add_theme_constant_override("v_separation", 6)
+	objects_page.add_child(object_grid)
+	_object_buttons.clear()
+	_add_object_button(object_grid, "House", "house")
+	_add_object_button(object_grid, "Oak Tree", "oak")
+	_add_object_button(object_grid, "Pine", "pine")
+	_add_object_button(object_grid, "Boulder", "boulder")
+	_add_object_button(object_grid, "Erase Object", "erase")
+	_add_section_title(objects_page, "STAMP TRANSFORM")
+	var transform_row := HBoxContainer.new()
+	objects_page.add_child(transform_row)
+	_make_button(transform_row, "Rotate −", func(): _rotate_stamp(-30.0))
+	_make_button(transform_row, "Rotate +", func(): _rotate_stamp(30.0))
+	var scale_row := HBoxContainer.new()
+	objects_page.add_child(scale_row)
+	_make_button(scale_row, "Scale −", func(): _scale_stamp(0.85))
+	_make_button(scale_row, "Scale +", func(): _scale_stamp(1.18))
+	var object_help := Label.new()
+	object_help.text = "Choose a stamp, then tap a hex to place it. Rotate and scale apply to the next stamp. Erase Object removes a placed item at the tapped hex."
+	object_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	object_help.add_theme_color_override("font_color", Color("a7ada5"))
+	objects_page.add_child(object_help)
+
+	var map_page := VBoxContainer.new()
+	map_page.name = "Map"
+	map_page.add_theme_constant_override("separation", 7)
+	tabs.add_child(map_page)
+	_add_section_title(map_page, "MAP FILE")
+	var file_row := HBoxContainer.new()
+	map_page.add_child(file_row)
+	_make_button(file_row, "Save…", _open_save_dialog)
+	_make_button(file_row, "Load…", _open_load_dialog)
+	var file_help := Label.new()
+	file_help.text = "Save the full map, terrain, elevation, and object stamps as a portable .hexmap file."
+	file_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	file_help.add_theme_color_override("font_color", Color("a7ada5"))
+	map_page.add_child(file_help)
+
+	_add_section_title(map_page, "WORLD GENERATION")
+	_make_button(map_page, "Generate Island", func(): _confirm_generation("island"))
+	_make_button(map_page, "Generate Highlands", func(): _confirm_generation("highlands"))
+	_make_button(map_page, "New Blank Map…", func(): _new_map_dialog.popup_centered())
+
+	_add_section_title(map_page, "SURFACE MATERIALS")
+	var surface_label := Label.new()
+	surface_label.text = "Ground texture detail"
+	surface_label.add_theme_color_override("font_color", Color("a7ada5"))
+	map_page.add_child(surface_label)
+	var surface_slider := HSlider.new()
+	surface_slider.min_value = 0.0
+	surface_slider.max_value = 1.0
+	surface_slider.step = 0.05
+	surface_slider.value = 0.78
+	surface_slider.value_changed.connect(func(value: float): board_view.set_surface_detail(value))
+	map_page.add_child(surface_slider)
+	var cliff_label := Label.new()
+	cliff_label.text = "Cliff rock detail"
+	cliff_label.add_theme_color_override("font_color", Color("a7ada5"))
+	map_page.add_child(cliff_label)
+	var cliff_slider := HSlider.new()
+	cliff_slider.min_value = 0.0
+	cliff_slider.max_value = 1.0
+	cliff_slider.step = 0.05
+	cliff_slider.value = 0.82
+	cliff_slider.value_changed.connect(func(value: float): board_view.set_cliff_detail(value))
+	map_page.add_child(cliff_slider)
+
+	_add_section_title(map_page, "DISPLAY")
+	var grid_toggle := CheckButton.new()
+	grid_toggle.text = "Hex outlines"
+	grid_toggle.button_pressed = true
+	grid_toggle.toggled.connect(func(enabled: bool):
+		if _outline_node != null:
+			_outline_node.visible = enabled
+	)
+	map_page.add_child(grid_toggle)
+	var grass_toggle := CheckButton.new()
+	grass_toggle.text = "Grass detail"
+	grass_toggle.button_pressed = true
+	grass_toggle.toggled.connect(func(enabled: bool):
+		if _grass_node != null:
+			_grass_node.visible = enabled
+	)
+	map_page.add_child(grass_toggle)
 
 	tool_status = Label.new()
 	tool_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tool_status.add_theme_color_override("font_color", Color("a7ada5"))
 	content.add_child(tool_status)
-
 	var history_row := HBoxContainer.new()
 	content.add_child(history_row)
 	undo_button = _make_button(history_row, "Undo", _undo)
@@ -193,17 +296,71 @@ func _build_editor_ui() -> void:
 	readout = Label.new()
 	readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(readout)
-	var help := Label.new()
-	help.text = "Raise and lower sculpted ground. Hills and ridges build landforms; Smooth softens them. Paint ground types or sample a hex."
-	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help.add_theme_color_override("font_color", Color("a7ada5"))
-	content.add_child(help)
+
 	fill_dialog = ConfirmationDialog.new()
 	fill_dialog.title = "Fill ground layer"
 	fill_dialog.confirmed.connect(_fill_ground)
 	layer.add_child(fill_dialog)
+	_new_map_dialog = ConfirmationDialog.new()
+	_new_map_dialog.title = "Create a blank map"
+	_new_map_dialog.dialog_text = "Clear the terrain, elevations, and placed objects? This starts a new blank map."
+	_new_map_dialog.confirmed.connect(_new_blank_map)
+	layer.add_child(_new_map_dialog)
+	_generation_dialog = ConfirmationDialog.new()
+	_generation_dialog.title = "Generate terrain"
+	_generation_dialog.confirmed.connect(_generate_map)
+	layer.add_child(_generation_dialog)
+	_save_dialog = _make_map_file_dialog(FileDialog.FILE_MODE_SAVE_FILE)
+	_save_dialog.file_selected.connect(_save_map_file)
+	layer.add_child(_save_dialog)
+	_load_dialog = _make_map_file_dialog(FileDialog.FILE_MODE_OPEN_FILE)
+	_load_dialog.file_selected.connect(_request_load_map)
+	layer.add_child(_load_dialog)
+	_load_confirmation = ConfirmationDialog.new()
+	_load_confirmation.title = "Load map"
+	_load_confirmation.confirmed.connect(func(): _load_map_file(_pending_load_path))
+	layer.add_child(_load_confirmation)
 	_build_camera_hud(layer)
 	_update_tool_status()
+	_update_history_buttons()
+
+func _add_section_title(parent: Control, title_text: String) -> void:
+	var label := Label.new()
+	label.text = title_text
+	label.add_theme_color_override("font_color", Color("c7b785"))
+	parent.add_child(label)
+
+func _add_object_button(parent: Control, button_text: String, object_kind: String) -> void:
+	var button := _make_button(parent, button_text, func(): _set_object_tool(object_kind))
+	button.toggle_mode = true
+	button.button_group = _object_group
+	button.set_meta("object_kind", object_kind)
+	button.toggled.connect(func(pressed: bool):
+		if pressed:
+			_set_object_tool(object_kind)
+	)
+	_object_buttons.append(button)
+
+func _make_map_file_dialog(mode_value: int) -> FileDialog:
+	var dialog := FileDialog.new()
+	dialog.file_mode = mode_value
+	dialog.access = FileDialog.ACCESS_USERDATA
+	dialog.current_dir = "user://"
+	dialog.filters = PackedStringArray(["*.hexmap ; Hex Foundry Map"])
+	dialog.size = Vector2(640.0, 480.0)
+	return dialog
+
+func _open_save_dialog() -> void:
+	_save_dialog.current_file = "MyMap.hexmap"
+	_save_dialog.popup_centered()
+
+func _open_load_dialog() -> void:
+	_load_dialog.popup_centered()
+
+func _request_load_map(path: String) -> void:
+	_pending_load_path = path
+	_load_confirmation.dialog_text = "Replace the current board with %s? Save the current map first if you want to keep it." % path.get_file()
+	_load_confirmation.popup_centered()
 
 func _build_camera_hud(layer: CanvasLayer) -> void:
 	var hud := PanelContainer.new()
@@ -277,7 +434,7 @@ func _make_camera_slider(parent: Control, minimum: float, maximum: float, initia
 func _add_sculpt_button(parent: Control, button_text: String, tool: int) -> void:
 	var button := _make_button(parent, button_text, func(): _set_elevation_tool(tool))
 	button.toggle_mode = true
-	button.button_group = _tool_group
+	button.button_group = _sculpt_group
 	button.toggled.connect(func(pressed: bool):
 		if pressed:
 			_set_elevation_tool(tool)
@@ -335,17 +492,44 @@ func _set_sample_tool() -> void:
 	_update_readout()
 
 func _set_house_place_tool() -> void:
+	_set_object_tool("house")
+
+func _set_object_tool(object_kind: String) -> void:
 	mode = EditMode.PLACEABLE
-	if _placeable_button != null and not _placeable_button.button_pressed:
-		_placeable_button.button_pressed = true
+	_active_object_type = object_kind
+	for button in _object_buttons:
+		if button.get_meta("object_kind", "") == object_kind and not button.button_pressed:
+			button.button_pressed = true
 	_update_tool_status()
 	_update_readout()
+
+func _rotate_stamp(delta_degrees: float) -> void:
+	_object_rotation_degrees = fposmod(_object_rotation_degrees + delta_degrees, 360.0)
+	_update_tool_status()
+	_update_readout()
+
+func _scale_stamp(factor: float) -> void:
+	_object_scale = clampf(_object_scale * factor, 0.55, 2.4)
+	_update_tool_status()
+	_update_readout()
+
+func _object_label(object_kind: String) -> String:
+	match object_kind:
+		"house": return "Cartoon House"
+		"oak": return "Oak Tree"
+		"pine": return "Pine"
+		"boulder": return "Boulder"
+		"erase": return "Erase Object"
+		_: return object_kind.capitalize()
 
 func _update_tool_status() -> void:
 	if tool_status == null:
 		return
 	if mode == EditMode.PLACEABLE:
-		tool_status.text = "Place: Cartoon House"
+		if _active_object_type == "erase":
+			tool_status.text = "Tap a placed object to erase it"
+		else:
+			tool_status.text = "Stamp: %s  •  %d°  •  %d%%" % [_object_label(_active_object_type), roundi(_object_rotation_degrees), roundi(_object_scale * 100.0)]
 		return
 	if mode == EditMode.GROUND:
 		tool_status.text = "Sample ground" if _sample_button != null and _sample_button.button_pressed else "Paint: " + HexGrid.TERRAIN_NAMES[active_terrain]
@@ -428,7 +612,7 @@ func _apply_at_screen(screen_position: Vector2) -> void:
 		_update_readout()
 		return
 	if mode == EditMode.PLACEABLE:
-		_place_house(cell)
+		_place_active_object(cell)
 		_last_stroke_cell = cell
 		_update_readout()
 		return
@@ -442,23 +626,136 @@ func _apply_at_screen(screen_position: Vector2) -> void:
 	_last_stroke_cell = cell
 	_update_readout()
 
-func _place_house(cell: Vector2i) -> void:
-	var packed_scene := load(HOUSE_MODEL_PATH) as PackedScene
-	if packed_scene == null:
-		tool_status.text = "Could not load cartoon_house.glb"
-		return
-	var house := packed_scene.instantiate() as Node3D
-	if house == null:
-		tool_status.text = "House model root must be a Node3D"
-		return
-	house.name = "PlacedCartoonHouse_%d" % (_placed_objects.size() + 1)
-	house.scale = Vector3.ONE * HOUSE_MODEL_SCALE
+func _place_active_object(cell: Vector2i, record_history: bool = true, object_kind: String = "", rotation_degrees: float = -1.0, object_scale: float = -1.0) -> Node3D:
+	var kind := _active_object_type if object_kind.is_empty() else object_kind
+	if kind == "erase":
+		_erase_object_at(cell)
+		return null
+	var node := _create_placeable_node(kind)
+	if node == null:
+		return null
+	var rotation := _object_rotation_degrees if rotation_degrees < 0.0 else rotation_degrees
+	var scale_factor := _object_scale if object_scale < 0.0 else object_scale
 	var center := grid.world_center(cell)
 	var surface_y := grid.elevation_at(cell) * HexGrid.HEIGHT_PER_LEVEL + CAP_HALF_HEIGHT
-	house.position = Vector3(center.x, surface_y - HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE, center.z)
-	board_view.add_child(house)
-	_set_placeable_materials(house)
-	_placed_objects.append(house)
+	if kind == "house":
+		node.scale = Vector3.ONE * HOUSE_MODEL_SCALE * scale_factor
+		surface_y -= HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE * scale_factor
+	else:
+		node.scale = Vector3.ONE * scale_factor
+	node.position = Vector3(center.x, surface_y, center.z)
+	node.rotation.y = deg_to_rad(rotation)
+	node.set_meta("map_object_type", kind)
+	node.set_meta("map_cell", cell)
+	node.set_meta("map_object_scale", scale_factor)
+	node.set_meta("map_object_rotation", rotation)
+	board_view.add_child(node)
+	_placed_objects.append(node)
+	if record_history:
+		_commit_undo({"_object_action": "place", "_object_node": node})
+	return node
+
+func _create_placeable_node(kind: String) -> Node3D:
+	if kind == "house":
+		var packed_scene := load(HOUSE_MODEL_PATH) as PackedScene
+		if packed_scene == null:
+			tool_status.text = "Could not load cartoon_house.glb"
+			return null
+		var house := packed_scene.instantiate() as Node3D
+		if house == null:
+			tool_status.text = "House model root must be a Node3D"
+			return null
+		house.name = "PlacedCartoonHouse_%d" % (_placed_objects.size() + 1)
+		_set_placeable_materials(house)
+		return house
+
+	var root := Node3D.new()
+	root.name = "Placed" + _object_label(kind).replace(" ", "")
+	match kind:
+		"oak":
+			var oak_trunk := CylinderMesh.new()
+			oak_trunk.top_radius = 0.07
+			oak_trunk.bottom_radius = 0.11
+			oak_trunk.height = 0.86
+			oak_trunk.radial_segments = 6
+			_add_object_mesh(root, oak_trunk, Vector3(0.0, 0.43, 0.0), Color("765338"))
+			var crown := SphereMesh.new()
+			crown.radius = 0.43
+			crown.height = 0.78
+			crown.radial_segments = 6
+			crown.rings = 3
+			_add_object_mesh(root, crown, Vector3(0.0, 1.05, 0.0), Color("47753c"), Vector3(1.0, 0.86, 1.0))
+			_add_object_mesh(root, crown, Vector3(-0.24, 0.98, 0.08), Color("588642"), Vector3(0.70, 0.72, 0.70))
+			_add_object_mesh(root, crown, Vector3(0.23, 1.12, -0.10), Color("64934a"), Vector3(0.66, 0.68, 0.66))
+		"pine":
+			var pine_trunk := CylinderMesh.new()
+			pine_trunk.top_radius = 0.055
+			pine_trunk.bottom_radius = 0.09
+			pine_trunk.height = 1.48
+			pine_trunk.radial_segments = 6
+			_add_object_mesh(root, pine_trunk, Vector3(0.0, 0.74, 0.0), Color("74513a"))
+			for tier in range(3):
+				var cone := ConeMesh.new()
+				cone.top_radius = 0.0
+				cone.bottom_radius = 0.43 - float(tier) * 0.055
+				cone.height = 0.78
+				cone.radial_segments = 7
+				_add_object_mesh(root, cone, Vector3(0.0, 0.64 + float(tier) * 0.34, 0.0), [Color("315f3e"), Color("3d7544"), Color("4a8248")][tier])
+		"boulder":
+			var rock := SphereMesh.new()
+			rock.radius = 0.48
+			rock.height = 0.78
+			rock.radial_segments = 5
+			rock.rings = 3
+			_add_object_mesh(root, rock, Vector3(0.0, 0.30, 0.0), Color("77776d"), Vector3(1.25, 0.78, 0.92))
+		_:
+			root.free()
+			return null
+	return root
+
+func _add_object_mesh(parent: Node3D, mesh: Mesh, local_position: Vector3, color: Color, local_scale: Vector3 = Vector3.ONE) -> void:
+	var instance := MeshInstance3D.new()
+	instance.mesh = mesh
+	instance.position = local_position
+	instance.scale = local_scale
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 0.92
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	parent.add_child(instance)
+
+func _erase_object_at(cell: Vector2i) -> void:
+	for object_index in range(_placed_objects.size() - 1, -1, -1):
+		var node := _placed_objects[object_index]
+		if not is_instance_valid(node) or not node.visible:
+			continue
+		if node.get_meta("map_cell", INVALID_CELL) == cell:
+			node.visible = false
+			_commit_undo({"_object_action": "erase", "_object_node": node})
+			tool_status.text = "Erased %s" % _object_label(str(node.get_meta("map_object_type", "object")))
+			_update_readout()
+			return
+	tool_status.text = "No object on hex %d, %d" % [cell.x, cell.y]
+
+func _refresh_objects_on_cell(cell: Vector2i) -> void:
+	var surface_y := grid.elevation_at(cell) * HexGrid.HEIGHT_PER_LEVEL + CAP_HALF_HEIGHT
+	for node in _placed_objects:
+		if not is_instance_valid(node) or not node.visible or node.get_meta("map_cell", INVALID_CELL) != cell:
+			continue
+		var kind := str(node.get_meta("map_object_type", ""))
+		if kind == "house":
+			var object_scale := float(node.get_meta("map_object_scale", 1.0))
+			surface_y = grid.elevation_at(cell) * HexGrid.HEIGHT_PER_LEVEL + CAP_HALF_HEIGHT - HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE * object_scale
+		else:
+			surface_y = grid.elevation_at(cell) * HexGrid.HEIGHT_PER_LEVEL + CAP_HALF_HEIGHT
+		node.position.y = surface_y
+
+func _resnap_all_objects() -> void:
+	for node in _placed_objects:
+		if is_instance_valid(node) and node.visible:
+			_refresh_objects_on_cell(node.get_meta("map_cell", INVALID_CELL))
 
 func _set_placeable_materials(node: Node) -> void:
 	if node is MeshInstance3D:
@@ -537,8 +834,13 @@ func _commit_undo(change_set: Dictionary) -> void:
 	_redo_history.clear()
 	if _undo_history.size() > 20:
 		_undo_history.pop_front()
-	undo_button.disabled = _undo_history.is_empty()
-	redo_button.disabled = true
+	_update_history_buttons()
+
+func _update_history_buttons() -> void:
+	if undo_button != null:
+		undo_button.disabled = _undo_history.is_empty()
+	if redo_button != null:
+		redo_button.disabled = _redo_history.is_empty()
 
 func _confirm_fill_ground() -> void:
 	_set_ground_tool(active_terrain)
@@ -578,6 +880,14 @@ func _undo() -> void:
 	if _undo_history.is_empty():
 		return
 	var change_set: Dictionary = _undo_history.pop_back()
+	if change_set.has("_object_action"):
+		var node := change_set["_object_node"] as Node3D
+		if is_instance_valid(node):
+			node.visible = str(change_set["_object_action"]) == "erase"
+		_redo_history.append(change_set)
+		_update_history_buttons()
+		_update_readout()
+		return
 	var redo_set: Dictionary = {}
 	for index_variant in change_set.keys():
 		var index := int(index_variant)
@@ -587,6 +897,8 @@ func _undo() -> void:
 		grid.set_elevation(cell, int(values["elevation"]))
 		grid.set_terrain(cell, int(values["terrain"]))
 		board_view.refresh_cell(cell)
+		_refresh_objects_on_cell(cell)
+		_refresh_objects_on_cell(cell)
 	_redo_history.append(redo_set)
 	board_view.refresh_cliffs()
 	undo_button.disabled = _undo_history.is_empty()
@@ -597,6 +909,14 @@ func _redo() -> void:
 	if _redo_history.is_empty():
 		return
 	var change_set: Dictionary = _redo_history.pop_back()
+	if change_set.has("_object_action"):
+		var node := change_set["_object_node"] as Node3D
+		if is_instance_valid(node):
+			node.visible = str(change_set["_object_action"]) == "place"
+		_undo_history.append(change_set)
+		_update_history_buttons()
+		_update_readout()
+		return
 	var undo_set: Dictionary = {}
 	for index_variant in change_set.keys():
 		var index := int(index_variant)
@@ -610,6 +930,180 @@ func _redo() -> void:
 	board_view.refresh_cliffs()
 	undo_button.disabled = false
 	redo_button.disabled = _redo_history.is_empty()
+	_update_readout()
+
+func _confirm_generation(preset: String) -> void:
+	_generation_preset = preset
+	_generation_dialog.dialog_text = "Replace the current terrain with a generated %s? Undo will restore the previous terrain." % ("island" if preset == "island" else "highlands")
+	_generation_dialog.popup_centered()
+
+func _generate_map() -> void:
+	var broad := FastNoiseLite.new()
+	broad.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	broad.seed = randi()
+	broad.frequency = 0.52
+	broad.fractal_type = FastNoiseLite.FRACTAL_FBM
+	broad.fractal_octaves = 4
+	var ridge_noise := FastNoiseLite.new()
+	ridge_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	ridge_noise.seed = broad.seed + 9187
+	ridge_noise.frequency = 0.7
+	ridge_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	ridge_noise.fractal_octaves = 3
+
+	var change_set: Dictionary = {}
+	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
+		var cell := grid.cell_from_index(index)
+		var nx := (float(cell.x) / float(HexGrid.COLUMNS - 1) - 0.5) * 2.0
+		var nz := (float(cell.y) / float(HexGrid.ROWS - 1) - 0.5) * 2.0
+		var broad_value := broad.get_noise_2d(float(cell.x) * 0.055, float(cell.y) * 0.055)
+		var level: int
+		var terrain: int
+		if _generation_preset == "island":
+			var distance := Vector2(nx, nz).length()
+			level = roundi((1.04 - distance) * 13.0 + broad_value * 3.2 - 1.8)
+			if level < 0:
+				terrain = HexGrid.Terrain.WATER
+			elif level <= 1:
+				terrain = HexGrid.Terrain.SAND
+			elif level >= 8:
+				terrain = HexGrid.Terrain.STONE
+			else:
+				terrain = HexGrid.Terrain.GRASS
+		else:
+			var ridge := 1.0 - absf(ridge_noise.get_noise_2d(float(cell.x + 91) * 0.045, float(cell.y - 43) * 0.045))
+			level = roundi(2.0 + broad_value * 4.0 + ridge * 5.0)
+			if level < 0:
+				terrain = HexGrid.Terrain.WATER
+			elif level <= 1:
+				terrain = HexGrid.Terrain.DIRT
+			elif level >= 7:
+				terrain = HexGrid.Terrain.STONE
+			else:
+				terrain = HexGrid.Terrain.GRASS
+		var old_elevation := grid.elevation_at(cell)
+		var old_terrain := grid.terrain_at(cell)
+		var bounded_level := clampi(level, HexGrid.MIN_ELEVATION, HexGrid.MAX_ELEVATION)
+		if old_elevation == bounded_level and old_terrain == terrain:
+			continue
+		change_set[index] = {"elevation": old_elevation, "terrain": old_terrain}
+		grid.set_elevation(cell, bounded_level)
+		grid.set_terrain(cell, terrain)
+
+	_resnap_all_objects()
+	board_view.refresh_all()
+	_last_stroke_cell = INVALID_CELL
+	if not change_set.is_empty():
+		_commit_undo(change_set)
+	tool_status.text = "Generated %s • Undo to restore" % ("island" if _generation_preset == "island" else "highlands")
+	_update_readout()
+
+func _new_blank_map() -> void:
+	grid.elevations.fill(0)
+	grid.terrain_ids.fill(HexGrid.Terrain.GRASS)
+	for node in _placed_objects:
+		if is_instance_valid(node):
+			node.queue_free()
+	_placed_objects.clear()
+	_stroke_before.clear()
+	_stroke_visited.clear()
+	_undo_history.clear()
+	_redo_history.clear()
+	board_view.refresh_all()
+	_update_history_buttons()
+	_update_tool_status()
+	_update_readout()
+
+func _save_map_file(path: String) -> void:
+	var object_records: Array[Dictionary] = []
+	for node in _placed_objects:
+		if not is_instance_valid(node) or not node.visible or not node.has_meta("map_object_type"):
+			continue
+		var cell: Vector2i = node.get_meta("map_cell", INVALID_CELL)
+		if not grid.contains(cell):
+			continue
+		object_records.append({
+			"type": str(node.get_meta("map_object_type", "house")),
+			"x": cell.x,
+			"y": cell.y,
+			"rotation": float(node.get_meta("map_object_rotation", 0.0)),
+			"scale": float(node.get_meta("map_object_scale", 1.0))
+		})
+	var payload := {
+		"format_version": 1,
+		"columns": HexGrid.COLUMNS,
+		"rows": HexGrid.ROWS,
+		"elevations": Array(grid.elevations),
+		"terrain_ids": Array(grid.terrain_ids),
+		"objects": object_records
+	}
+	var final_path := path if path.get_extension().to_lower() == "hexmap" else path + ".hexmap"
+	var file := FileAccess.open(final_path, FileAccess.WRITE)
+	if file == null:
+		tool_status.text = "Save failed: %s" % error_string(FileAccess.get_open_error())
+		return
+	file.store_string(JSON.stringify(payload, "\t"))
+	file.close()
+	tool_status.text = "Saved %s" % final_path.get_file()
+	_update_readout()
+
+func _load_map_file(path: String) -> void:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		tool_status.text = "Load failed: %s" % error_string(FileAccess.get_open_error())
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if typeof(parsed) != TYPE_DICTIONARY:
+		tool_status.text = "That file is not a Hex Foundry map"
+		return
+	var map_data: Dictionary = parsed
+	var elevations_value: Variant = map_data.get("elevations", [])
+	var terrain_value: Variant = map_data.get("terrain_ids", [])
+	if int(map_data.get("format_version", 0)) != 1 or int(map_data.get("columns", 0)) != HexGrid.COLUMNS or int(map_data.get("rows", 0)) != HexGrid.ROWS or typeof(elevations_value) != TYPE_ARRAY or typeof(terrain_value) != TYPE_ARRAY:
+		tool_status.text = "Map size or data is not supported"
+		return
+	var count := HexGrid.COLUMNS * HexGrid.ROWS
+	if elevations_value.size() != count or terrain_value.size() != count:
+		tool_status.text = "Map file is incomplete"
+		return
+
+	grid.elevations = PackedInt32Array()
+	grid.elevations.resize(count)
+	grid.terrain_ids = PackedByteArray()
+	grid.terrain_ids.resize(count)
+	for index in range(count):
+		grid.elevations[index] = clampi(int(elevations_value[index]), HexGrid.MIN_ELEVATION, HexGrid.MAX_ELEVATION)
+		grid.terrain_ids[index] = clampi(int(terrain_value[index]), HexGrid.Terrain.GRASS, HexGrid.Terrain.ROAD)
+	for node in _placed_objects:
+		if is_instance_valid(node):
+			node.queue_free()
+	_placed_objects.clear()
+	var objects_value: Variant = map_data.get("objects", [])
+	if typeof(objects_value) == TYPE_ARRAY:
+		for record_variant in objects_value:
+			if typeof(record_variant) != TYPE_DICTIONARY:
+				continue
+			var record: Dictionary = record_variant
+			var cell := Vector2i(int(record.get("x", -1)), int(record.get("y", -1)))
+			var kind := str(record.get("type", ""))
+			if not grid.contains(cell) or not ["house", "oak", "pine", "boulder"].has(kind):
+				continue
+			_place_active_object(
+				cell,
+				false,
+				kind,
+				float(record.get("rotation", 0.0)),
+				clampf(float(record.get("scale", 1.0)), 0.55, 2.4)
+			)
+	_stroke_before.clear()
+	_stroke_visited.clear()
+	_undo_history.clear()
+	_redo_history.clear()
+	board_view.refresh_all()
+	_update_history_buttons()
+	_update_tool_status()
+	tool_status.text = "Loaded %s" % path.get_file()
 	_update_readout()
 
 func _zoom_camera(factor: float) -> void:

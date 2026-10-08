@@ -1,31 +1,40 @@
 # MapbuilderhexmapSR
 
-Standalone Godot 4.7 project for a mobile-friendly hex map builder. It opens on a 64 × 128 editable hex field with elevation, ground-painting, brush-size, camera, and stroke undo/redo tools.
+A standalone Godot 4.7 mobile-friendly hex map builder. The editor opens on a 64 × 128 board with 8,192 editable hexes and a close camera mode for detailed terrain work.
 
-## Open in Godot
+## Editor workspaces
 
-Open the repository root in Godot 4.7. The Sculpt panel provides Raise, Lower, Flatten, Smooth, Hill, and Ridge tools; brush sizes range from 1 to 8 hexes, and elevation is limited to +15 and −15. The Ground panel paints Grass, Dirt, Stone, Water, Sand, Snow, Mud, and Road. Sample picks an existing ground type, while Fill board paints the whole ground layer after confirmation. Undo and Redo apply to whole strokes or a layer fill. The floating camera HUD provides zoom, slide, tilt, orbit, and reset controls; mouse-wheel and pinch gestures zoom, while the Slide button enables drag-to-pan. The zoom slider reaches a camera distance of 32 units for close terrain inspection. Hex caps render complete top faces, with a separate subdued outline grid over the flat color terrain.
+The side panel is divided into three workspaces:
 
-The hexes use pointy-top geometry aligned to the offset-row grid. Thin gaps define the cell edges without overlapping side faces. Each cell stores elevation and ground type independently; elevated edges generate faceted rock faces between cells. Objects, textures, save/load, and export of authored maps are not part of this terrain editing pass.
+- **Terrain** — raise, lower, flatten, smooth, build hills and ridges, choose a 1–8 hex brush, paint Grass, Dirt, Stone, Water, Sand, Snow, Mud, or Road, sample a tile, and fill the ground layer.
+- **Objects** — stamp the supplied Cartoon House model or low-poly Oak Tree, Pine, and Boulder props. Rotate and scale the next stamp, or use Erase Object to remove a placed item. Object placement and removal support Undo and Redo.
+- **Map** — save and load portable .hexmap files, generate an island or highlands layout, start a blank map, toggle hex outlines and grass detail, and tune ground and cliff texture detail.
 
-## Layout
+Map files store the board dimensions, elevation, terrain ids, and placed objects. They are saved through Godot's user:// file picker so builds can read and write them on Android. Map generation replaces terrain and elevation as one undoable operation. A blank-map reset clears the current undo history.
 
-- `scenes/` — Godot scenes
-- `scripts/` — editor and map logic
-- `assets/models/` — 3D models
-- `assets/materials/` — materials
-- `assets/textures/` — textures
-- `.github/workflows/android-apk.yml` — headless validation and Android APK build
+## Terrain rendering
 
-## Build and validation
+Terrain material shaders layer world-space procedural noise for grass mottling, soil grain, sand ripples, and animated water. Exposed edges form continuous stylized rock walls with displaced low-poly facets, warm mineral variation, strata, cracks, moss, and a terrain-colored grass lip. The Map workspace has live detail sliders for the ground and cliff shaders. Grass tufts use one instanced mesh across the board to keep draw calls low.
 
-GitHub Actions downloads Godot 4.7.2 and its export templates when the workflow runs. It checks project import and main-scene startup before exporting the Android APK. The engine binaries are not stored in this repository.
+## Camera and input
 
-The Android package ID is `com.tpylman90.mapbuilderhexmap`, matching the existing Mapbuilderhexmap signing backup so signed builds can update the installed app. Release credentials are supplied through GitHub Actions secrets, never committed here. Each build advances the Android version code and uploads a short-retention `MapbuilderhexmapSR-Android` artifact.
+The camera HUD provides zoom, slide-to-pan, tilt, orbit, and Home reset. The zoom control reaches close enough to inspect a handful of tiles. Pinch and mouse-wheel gestures zoom, and dragging pans while Slide is enabled. Touch or click the board to sculpt, paint, or place objects.
 
-Add these repository secrets under **Settings → Secrets and variables → Actions**:
+## Project layout
 
-- `ANDROID_KEYSTORE_BASE64`
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
+- scenes/ — main scene
+- scripts/ — editor, hex-grid data, and board rendering
+- assets/models/ — placeable 3D models
+- assets/materials/ — procedural terrain shaders
+- .github/workflows/android-apk.yml — headless validation and signed Android APK build
+
+## Open and build
+
+Open the repository root in Godot 4.7. GitHub Actions downloads Godot 4.7.2 and its export templates, checks project import and main-scene startup, then exports the Android APK. Release signing keys come from GitHub Actions secrets and are never committed. Each signed build uses the existing Android package id so it can update the installed app.
+
+Required repository secrets:
+
+- ANDROID_KEYSTORE_BASE64
+- ANDROID_KEYSTORE_PASSWORD
+- ANDROID_KEY_ALIAS
+- ANDROID_KEY_PASSWORD
