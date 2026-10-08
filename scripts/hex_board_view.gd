@@ -266,6 +266,8 @@ func _refresh_shoreline_cell(cell: Vector2i) -> void:
 		if is_water and meets_ground:
 			var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
 			transform.basis = Basis(Vector3.UP, PI * 0.5 - middle_angle)
+		if cell == Vector2i(21, 40) and edge == 0:
+			print("Shore func debug ground=", data.terrain_at(neighbor), " is_water=", is_water, " meets_ground=", meets_ground, " incoming=", shoreline_instances.get_instance_transform(index * 6 + edge).basis.get_scale(), " outgoing=", transform.basis.get_scale())
 		shoreline_instances.set_instance_transform(index * 6 + edge, transform)
 
 func _make_water_hex_mesh(subdivisions: int) -> ArrayMesh:
