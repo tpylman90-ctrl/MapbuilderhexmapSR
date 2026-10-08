@@ -20,5 +20,5 @@ void fragment() {
 	float broken_wave = smoothstep(-0.42, 0.62, broad_foam) * smoothstep(-0.58, 0.58, small_foam);
 	float across = smoothstep(0.02, 0.22, UV.y) * (1.0 - smoothstep(0.72, 1.0, UV.y));
 	ALBEDO = foam_tint * (0.82 + 0.18 * broken_wave);
-	ALPHA = across * (0.08 + 0.54 * broken_wave) * COLOR.a;
+	ALPHA = across * (0.08 + 0.54 * broken_wave);
 }
