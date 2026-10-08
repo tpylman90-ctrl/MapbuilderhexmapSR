@@ -263,11 +263,15 @@ func _refresh_shoreline_cell(cell: Vector2i) -> void:
 	for edge in range(6):
 		var neighbor := data.neighbor_for_edge(cell, edge)
 		var meets_ground := not data.contains(neighbor) or data.terrain_at(neighbor) != HexGrid.Terrain.WATER
+		var is_shore := is_water and meets_ground
 		var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
-		var transform := Transform3D(Basis(Vector3.UP, PI * 0.5 - middle_angle), center)
+		var basis := Basis(Vector3.UP, PI * 0.5 - middle_angle)
+		if not is_shore:
+			basis = basis.scaled(Vector3.ONE * 0.0001)
+		var transform := Transform3D(basis, center)
 		var instance_index := index * 6 + edge
 		shoreline_instances.set_instance_transform(instance_index, transform)
-		shoreline_instances.set_instance_color(instance_index, Color.WHITE if is_water and meets_ground else Color(1.0, 1.0, 1.0, 0.0))
+		shoreline_instances.set_instance_color(instance_index, Color.WHITE if is_shore else Color(1.0, 1.0, 1.0, 0.0))
 
 func _make_water_hex_mesh(subdivisions: int) -> ArrayMesh:
 	var surface := SurfaceTool.new()
