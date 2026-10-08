@@ -93,21 +93,12 @@ func _run() -> void:
 	board_view.refresh_cell(water_cell)
 	var shoreline_instances := board_view.get("shoreline_instances") as MultiMesh
 	var shoreline_index := grid.index_of(water_cell) * 6 + shoreline_edge
-	if shoreline_instances == null or shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length() < 1.0:
+	if shoreline_instances == null or shoreline_instances.get_instance_color(shoreline_index).a < 0.99:
 		_fail("Water-ground edge did not receive a shoreline highlight")
 		return
 	grid.set_terrain(shore_neighbor, HexGrid.Terrain.WATER)
 	board_view.refresh_cell(shore_neighbor)
-	var reverse_edge := -1
-	for candidate_edge in range(6):
-		if grid.neighbor_for_edge(shore_neighbor, candidate_edge) == water_cell:
-			reverse_edge = candidate_edge
-	var shared_neighbor_terrain := grid.terrain_at(grid.neighbor_for_edge(water_cell, shoreline_edge))
-	var stale_shore_scale := shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length()
-	print("Shore debug cell=", water_cell, " neighbor=", shore_neighbor, " reverse_edge=", reverse_edge, " neighbor_terrain=", shared_neighbor_terrain, " refreshing_all=", board_view.get("_refreshing_all"), " scale_after_neighbor_refresh=", stale_shore_scale)
-	board_view.call("_refresh_shoreline_cell", water_cell)
-	print("Shore debug scale_after_direct_refresh=", shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length())
-	if stale_shore_scale > 0.01:
+	if shoreline_instances.get_instance_color(shoreline_index).a > 0.01:
 		_fail("Internal water-water edges should not render shoreline foam")
 		return
 	var low_vertex_count := (water_instances.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()

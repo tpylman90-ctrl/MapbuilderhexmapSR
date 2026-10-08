@@ -208,6 +208,7 @@ func set_water_flow_direction(direction: Vector2) -> void:
 func _build_shoreline_instances() -> void:
 	shoreline_instances = MultiMesh.new()
 	shoreline_instances.transform_format = MultiMesh.TRANSFORM_3D
+	shoreline_instances.use_colors = true
 	shoreline_instances.mesh = _make_shoreline_strip_mesh()
 	shoreline_instances.instance_count = HexGrid.COLUMNS * HexGrid.ROWS * 6
 	shoreline_node = MultiMeshInstance3D.new()
@@ -262,13 +263,11 @@ func _refresh_shoreline_cell(cell: Vector2i) -> void:
 	for edge in range(6):
 		var neighbor := data.neighbor_for_edge(cell, edge)
 		var meets_ground := not data.contains(neighbor) or data.terrain_at(neighbor) != HexGrid.Terrain.WATER
-		var transform := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), center)
-		if is_water and meets_ground:
-			var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
-			transform.basis = Basis(Vector3.UP, PI * 0.5 - middle_angle)
-		if cell == Vector2i(21, 40) and edge == 0:
-			print("Shore func debug ground=", data.terrain_at(neighbor), " is_water=", is_water, " meets_ground=", meets_ground, " incoming=", shoreline_instances.get_instance_transform(index * 6 + edge).basis.get_scale(), " outgoing=", transform.basis.get_scale())
-		shoreline_instances.set_instance_transform(index * 6 + edge, transform)
+		var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
+		var transform := Transform3D(Basis(Vector3.UP, PI * 0.5 - middle_angle), center)
+		var instance_index := index * 6 + edge
+		shoreline_instances.set_instance_transform(instance_index, transform)
+		shoreline_instances.set_instance_color(instance_index, Color.WHITE if is_water and meets_ground else Color(1.0, 1.0, 1.0, 0.0))
 
 func _make_water_hex_mesh(subdivisions: int) -> ArrayMesh:
 	var surface := SurfaceTool.new()
