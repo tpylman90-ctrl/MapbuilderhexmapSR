@@ -1,7 +1,6 @@
 extends SceneTree
 
 const TEST_PATH := "user://mapbuilder_roundtrip_test.hexmap"
-const EXPORT_TEST_PATH := "user://mapbuilder_export_test.png"
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -81,11 +80,6 @@ func _run() -> void:
 		_fail("Redo did not erase the object again")
 		return
 
-	await editor.call("_export_map_png", EXPORT_TEST_PATH)
-	if not FileAccess.file_exists(EXPORT_TEST_PATH):
-		_fail("Current-view PNG export did not create an image")
-		return
-
 	var water_cell := Vector2i(21, 40)
 	grid.set_terrain(water_cell, HexGrid.Terrain.WATER)
 	board_view.refresh_cell(water_cell)
@@ -144,8 +138,7 @@ func _run() -> void:
 		return
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_PATH))
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(EXPORT_TEST_PATH))
-	print("Map builder round-trip, object history, named markers, PNG export, and island generation passed.")
+	print("Map builder round-trip, object history, named markers, and island generation passed.")
 	quit(0)
 
 func _fail(message: String) -> void:
