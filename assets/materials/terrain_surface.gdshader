@@ -91,4 +91,16 @@ void fragment() {
 	ALBEDO = mix(mix(exposed_rock, top_surface, top_blend), water_surface, water_mask);
 	ROUGHNESS = mix(0.90 - detail * 0.05 + fine * 0.04, 0.26, water_mask);
 	SPECULAR = mix(0.20, 0.58, water_mask);
+
+	// Fine procedural height variation drives a real lighting normal, not only color.
+	float bump_height = (medium - 0.5) * 0.008 + (fine - 0.5) * 0.014 + (grain - 0.5) * 0.005;
+	float bump_strength = (1.0 - water_mask) * top_blend * (0.72 + detail * 0.48);
+	vec3 base_normal = normalize(NORMAL);
+	vec3 dpdx = dFdx(VERTEX);
+	vec3 dpdy = dFdy(VERTEX);
+	vec3 r1 = cross(dpdy, base_normal);
+	vec3 r2 = cross(base_normal, dpdx);
+	float determinant = dot(dpdx, r1);
+	vec3 bump_gradient = sign(determinant) * (dFdx(bump_height) * r1 + dFdy(bump_height) * r2);
+	NORMAL = normalize(abs(determinant) * base_normal - bump_gradient * bump_strength);
 }

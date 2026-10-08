@@ -50,11 +50,23 @@ func initialize(grid_data: HexGrid) -> void:
 func _build_backing() -> void:
 	var world := WorldEnvironment.new()
 	var environment := Environment.new()
-	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color("98aaa2")
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color("c7c9b3")
-	environment.ambient_light_energy = 0.35
+	# A restrained outdoor sky supplies a natural horizon and image-based ambient fill.
+	var sky := Sky.new()
+	var sky_material := ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = Color("66808b")
+	sky_material.sky_horizon_color = Color("d0d0b9")
+	sky_material.ground_bottom_color = Color("384238")
+	sky_material.ground_horizon_color = Color("919b7c")
+	sky_material.sky_curve = 0.24
+	sky_material.ground_curve = 0.20
+	sky_material.sky_energy_multiplier = 0.82
+	sky_material.ground_energy_multiplier = 0.62
+	sky_material.use_debanding = true
+	sky.sky_material = sky_material
+	environment.background_mode = Environment.BG_SKY
+	environment.sky = sky
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	environment.ambient_light_energy = 0.43
 	environment.tonemap_exposure = 0.86
 	environment.fog_enabled = true
 	environment.fog_light_color = Color("a9bdb1")

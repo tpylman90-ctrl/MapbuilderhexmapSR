@@ -61,4 +61,15 @@ void fragment() {
 	vec3 upper_edge = COLOR.rgb * mix(0.90, 1.02, broad);
 	ALBEDO = mix(rock, upper_edge, top_blend * 0.55);
 	ROUGHNESS = mix(0.88, 0.99, grain);
+
+	// Chisel-sized relief catches light across the larger sculpted facets.
+	float bump_height = (grain - 0.5) * 0.012 + (micro_grain - 0.5) * 0.004 + (strata - 0.5) * 0.007 + (vein - 0.5) * 0.004;
+	vec3 base_normal = normalize(NORMAL);
+	vec3 dpdx = dFdx(VERTEX);
+	vec3 dpdy = dFdy(VERTEX);
+	vec3 r1 = cross(dpdy, base_normal);
+	vec3 r2 = cross(base_normal, dpdx);
+	float determinant = dot(dpdx, r1);
+	vec3 bump_gradient = sign(determinant) * (dFdx(bump_height) * r1 + dFdy(bump_height) * r2);
+	NORMAL = normalize(abs(determinant) * base_normal - bump_gradient * (0.65 + rock_detail * 0.45));
 }
