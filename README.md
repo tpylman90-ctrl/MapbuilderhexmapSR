@@ -8,13 +8,13 @@ The side panel is divided into three workspaces:
 
 - **Terrain** — raise, lower, flatten, smooth, build hills and ridges, choose a 1–8 hex brush, paint Grass, Dirt, Stone, Water, Sand, Snow, Mud, or Road, sample a tile, and fill the ground layer.
 - **Objects** — stamp the supplied Cartoon House model or low-poly Oak Tree, Pine, and Boulder props. Rotate and scale the next stamp, or use Erase Object to remove a placed item. Object placement and removal support Undo and Redo.
-- **Map** — save and load portable .hexmap files, generate an island or highlands layout, start a blank map, toggle hex outlines and grass detail, and tune ground and cliff texture detail.
+- **Map** — save and load portable .hexmap files, generate an island or highlands layout, start a blank map, toggle hex outlines and grass detail, tune ground and cliff texture detail, and select low, balanced, or high animated water mesh detail.
 
 Map files store the board dimensions, elevation, terrain ids, and placed objects. They are saved through Godot's user:// file picker so builds can read and write them on Android. Map generation replaces terrain and elevation as one undoable operation. A blank-map reset clears the current undo history.
 
 ## Terrain rendering
 
-Terrain material shaders layer world-space procedural noise for grass mottling, soil grain, sand ripples, and animated water. Exposed edges form continuous stylized rock walls with displaced low-poly facets, warm mineral variation, strata, cracks, moss, and a terrain-colored grass lip. The Map workspace has live detail sliders for the ground and cliff shaders. Grass tufts use one instanced mesh across the board to keep draw calls low.
+Terrain material shaders layer world-space procedural noise for grass mottling, soil grain, and sand ripples. Water uses a dedicated radially subdivided mesh with animated crossing waves, a soft shoreline fade, and a narrow foam highlight. Exposed edges form continuous stylized rock walls with displaced low-poly facets, warm mineral variation, strata, cracks, moss, and a terrain-colored grass lip. The Map workspace has live detail sliders for the ground and cliff shaders plus three water-mesh detail levels. Grass tufts use one instanced mesh across the board to keep draw calls low.
 
 ## Camera and input
 

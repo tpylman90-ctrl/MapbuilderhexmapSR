@@ -264,6 +264,21 @@ func _build_editor_ui() -> void:
 	cliff_slider.value_changed.connect(func(value: float): board_view.set_cliff_detail(value))
 	map_page.add_child(cliff_slider)
 
+	_add_section_title(map_page, "WATER")
+	var water_label := Label.new()
+	water_label.text = "Wave mesh detail"
+	water_label.add_theme_color_override("font_color", Color("a7ada5"))
+	map_page.add_child(water_label)
+	var water_detail := OptionButton.new()
+	water_detail.add_item("Low · 2 subdivisions", 2)
+	water_detail.add_item("Balanced · 4 subdivisions", 4)
+	water_detail.add_item("High · 6 subdivisions", 6)
+	water_detail.select(1)
+	water_detail.item_selected.connect(func(item: int):
+		board_view.set_water_subdivisions(water_detail.get_item_id(item))
+	)
+	map_page.add_child(water_detail)
+
 	_add_section_title(map_page, "DISPLAY")
 	var grid_toggle := CheckButton.new()
 	grid_toggle.text = "Hex outlines"

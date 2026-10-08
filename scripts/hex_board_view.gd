@@ -12,6 +12,10 @@ var tile_instances: MultiMesh
 var grid_node: MultiMeshInstance3D
 var grass_instances: MultiMesh
 var grass_node: MultiMeshInstance3D
+var water_instances: MultiMesh
+var water_node: MultiMeshInstance3D
+var water_shader_material: ShaderMaterial
+var water_subdivisions: int = 4
 var terrain_shader_material: ShaderMaterial
 var cliff_shader_material: ShaderMaterial
 var surface_detail_strength: float = 0.78
@@ -123,6 +127,7 @@ func _build_tile_mesh() -> void:
 	grid_node.material_override = terrain_shader_material
 	add_child(grid_node)
 	_build_grass_instances()
+	_build_water_instances()
 
 	var outlines := MultiMesh.new()
 	outlines.transform_format = MultiMesh.TRANSFORM_3D
@@ -138,6 +143,81 @@ func _build_tile_mesh() -> void:
 	outline_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	outline_node.material_override = outline_material
 	add_child(outline_node)
+
+func _build_water_instances() -> void:
+	water_instances = MultiMesh.new()
+	water_instances.transform_format = MultiMesh.TRANSFORM_3D
+	water_instances.mesh = _make_water_hex_mesh(water_subdivisions)
+	water_instances.instance_count = HexGrid.COLUMNS * HexGrid.ROWS
+	water_node = MultiMeshInstance3D.new()
+	water_node.name = "AnimatedWaterHexes"
+	water_node.multimesh = water_instances
+	water_shader_material = ShaderMaterial.new()
+	water_shader_material.shader = load("res://assets/materials/water_surface.gdshader") as Shader
+	water_node.material_override = water_shader_material
+	add_child(water_node)
+
+func _refresh_water_cell(cell: Vector2i, index: int, center: Vector3) -> void:
+	if water_instances == null:
+		return
+	var transform := Transform3D(Basis.IDENTITY, center)
+	if data.terrain_at(cell) == HexGrid.Terrain.WATER:
+		transform.origin.y += CAP_HEIGHT * 0.5 + 0.014
+	else:
+		transform.basis = Basis.from_scale(Vector3.ZERO)
+	water_instances.set_instance_transform(index, transform)
+
+func set_water_subdivisions(value: int) -> void:
+	var bounded := clampi(value, 2, 6)
+	if bounded == water_subdivisions and water_instances != null:
+		return
+	water_subdivisions = bounded
+	if water_instances != null:
+		water_instances.mesh = _make_water_hex_mesh(water_subdivisions)
+
+func _make_water_hex_mesh(subdivisions: int) -> ArrayMesh:
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var top_y := 0.0
+	var corners: Array[Vector3] = []
+	for edge in range(6):
+		var angle := deg_to_rad(30.0 + 60.0 * edge)
+		corners.append(Vector3(cos(angle) * EDGE_RADIUS, top_y, sin(angle) * EDGE_RADIUS))
+	var center := Vector3.ZERO
+	for edge in range(6):
+		var corner_b := corners[edge]
+		var corner_c := corners[(edge + 1) % 6]
+		for row in range(subdivisions):
+			for column in range(row + 1):
+				var p1 := _water_slice_point(center, corner_b, corner_c, row, column, subdivisions)
+				var p2 := _water_slice_point(center, corner_b, corner_c, row + 1, column, subdivisions)
+				var p3 := _water_slice_point(center, corner_b, corner_c, row + 1, column + 1, subdivisions)
+				_add_water_triangle(surface, p1, p2, p3)
+				if column > 0:
+					var p4 := _water_slice_point(center, corner_b, corner_c, row, column - 1, subdivisions)
+					_add_water_triangle(surface, p1, p4, p2)
+	return surface.commit()
+
+func _water_slice_point(a: Vector3, b: Vector3, c: Vector3, row: int, column: int, subdivisions: int) -> Vector3:
+	if row == 0:
+		return a
+	var row_ratio := float(row) / float(subdivisions)
+	var column_ratio := float(column) / float(row)
+	var edge_b := a.lerp(b, row_ratio)
+	var edge_c := a.lerp(c, row_ratio)
+	return edge_b.lerp(edge_c, column_ratio)
+
+func _add_water_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
+	var normal := (b - a).cross(c - a)
+	if normal.y < 0.0:
+		var swap := b
+		b = c
+		c = swap
+	var uv_scale := 1.0 / (EDGE_RADIUS * 2.0)
+	for point in [a, b, c]:
+		surface.set_normal(Vector3.UP)
+		surface.set_uv(Vector2(point.x * uv_scale + 0.5, point.z * uv_scale + 0.5))
+		surface.add_vertex(point)
 
 func _build_grass_instances() -> void:
 	var instances := MultiMesh.new()
@@ -238,6 +318,7 @@ func refresh_cell(cell: Vector2i) -> void:
 	outline_instances.set_instance_transform(index, Transform3D(Basis.IDENTITY, center))
 	tile_instances.set_instance_color(index, HexGrid.TERRAIN_COLORS[data.terrain_at(cell)])
 	_refresh_grass_cell(cell, index)
+	_refresh_water_cell(cell, index, center)
 	if cell == selected_cell:
 		_update_selection()
 

@@ -62,6 +62,21 @@ func _run() -> void:
 		_fail("Redo did not erase the object again")
 		return
 
+	var water_cell := Vector2i(21, 40)
+	grid.set_terrain(water_cell, HexGrid.Terrain.WATER)
+	board_view.refresh_cell(water_cell)
+	board_view.set_water_subdivisions(2)
+	var water_instances := board_view.get("water_instances") as MultiMesh
+	if water_instances == null or water_instances.get_instance_transform(grid.index_of(water_cell)).basis.get_scale().length() < 1.0:
+		_fail("Water terrain did not enable its animated water instance")
+		return
+	var low_vertex_count := (water_instances.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	board_view.set_water_subdivisions(6)
+	var high_vertex_count := (water_instances.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	if high_vertex_count <= low_vertex_count:
+		_fail("Water mesh detail did not add wave vertices")
+		return
+
 	editor.call("_new_blank_map")
 	editor.set("_generation_preset", "island")
 	editor.call("_generate_map")
