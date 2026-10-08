@@ -16,6 +16,8 @@ var ledge_node: MeshInstance3D
 var selection_node: MeshInstance3D
 var selected_cell := Vector2i(-1, -1)
 var cliff_noise := FastNoiseLite.new()
+var cliff_blend_top_y := 0.0
+var cliff_blend_color := Color.WHITE
 
 func initialize(grid_data: HexGrid) -> void:
 	data = grid_data
@@ -239,6 +241,8 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 	var top_y := high_level * STEP_HEIGHT + CAP_HEIGHT * 0.5
 	var wall_height := top_y - bottom_y
 	var edge_length := edge_a.distance_to(edge_b)
+	cliff_blend_top_y = top_y
+	cliff_blend_color = HexGrid.TERRAIN_COLORS[data.terrain_at(cell)].lightened(0.14)
 
 	# Seed each edge from its cell so sculpting and undo rebuild the same rock.
 	var rng := RandomNumberGenerator.new()
@@ -289,8 +293,8 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 			right_top.y = segment_high
 			# Keep the wall's top edge flush to the hex cap, then let lower rock
 			# sections bulge and break away from the regular hex outline.
-			var bottom_fade := clampf((top_y - segment_low) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
-			var top_fade := clampf((top_y - segment_high) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
+			var bottom_fade := 0.0 if segment == 0 else clampf((top_y - segment_low) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
+			var top_fade := 0.0 if segment == vertical_segments - 1 else clampf((top_y - segment_high) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
 			var ridge_fade := (bottom_fade + top_fade) * 0.5
 			# A raised ridge gives each long buttress several broad, readable planes.
 			var ridge := edge_a.lerp(edge_b, (previous_center + next_center) * 0.5 + rng.randf_range(-0.075, 0.075))
@@ -386,8 +390,8 @@ func _append_cliff_backing_grid(surface: SurfaceTool, edge_a: Vector3, edge_b: V
 		var high_ratio := float(y_step + 1) / vertical_segments
 		var low_y := lerpf(bottom_y, top_y, low_ratio)
 		var high_y := lerpf(bottom_y, top_y, high_ratio)
-		var low_fade := clampf((top_y - low_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
-		var high_fade := clampf((top_y - high_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
+		var low_fade := 0.0 if y_step == 0 else clampf((top_y - low_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
+		var high_fade := 0.0 if y_step == vertical_segments - 1 else clampf((top_y - high_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
 		for x_step in range(horizontal_segments):
 			var left_ratio := float(x_step) / horizontal_segments
 			var right_ratio := float(x_step + 1) / horizontal_segments
@@ -399,10 +403,12 @@ func _append_cliff_backing_grid(surface: SurfaceTool, edge_a: Vector3, edge_b: V
 			low_right.y = low_y
 			high_left.y = high_y
 			high_right.y = high_y
-			low_left += _cliff_vertex_breakup(low_left, center, outward, low_fade)
-			low_right += _cliff_vertex_breakup(low_right, center, outward, low_fade)
-			high_left += _cliff_vertex_breakup(high_left, center, outward, high_fade)
-			high_right += _cliff_vertex_breakup(high_right, center, outward, high_fade)
+			var left_seam_fade := clampf(minf(left_ratio, 1.0 - left_ratio) * 3.0, 0.0, 1.0)
+			var right_seam_fade := clampf(minf(right_ratio, 1.0 - right_ratio) * 3.0, 0.0, 1.0)
+			low_left += _cliff_vertex_breakup(low_left, center, outward, low_fade * left_seam_fade)
+			low_right += _cliff_vertex_breakup(low_right, center, outward, low_fade * right_seam_fade)
+			high_left += _cliff_vertex_breakup(high_left, center, outward, high_fade * left_seam_fade)
+			high_right += _cliff_vertex_breakup(high_right, center, outward, high_fade * right_seam_fade)
 			var shade := 0.90 + cliff_noise.get_noise_3d(low_left.x * 1.7, low_y, low_left.z * 1.7) * 0.10
 			var rock_color := Color("343832").darkened(1.0 - shade)
 			_add_side_triangle(surface, low_left, high_left, high_right, rock_color)
@@ -412,16 +418,22 @@ func _add_side_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3
 	# Side UVs tile across the wall and rise with elevation, avoiding one stretched
 	# hex-wide mapping on tall cliffs. The shader can use this for vertical strata.
 	for point in [a, b, c]:
-		surface.set_color(color)
+		var edge_wobble := sin(point.x * 5.7 + point.z * 4.1) * 0.055
+		var blend_depth := maxf(0.24, 0.36 + edge_wobble)
+		var blend_t := clampf((cliff_blend_top_y - point.y) / blend_depth, 0.0, 1.0)
+		blend_t = blend_t * blend_t * (3.0 - 2.0 * blend_t)
+		var vertex_color := color.lerp(cliff_blend_color, (1.0 - blend_t) * 0.84)
+		surface.set_smooth_group(0)
+		surface.set_color(vertex_color)
 		surface.set_uv(Vector2((point.x + point.z) * 0.65, point.y * 0.55))
 		surface.add_vertex(point)
 
 func _append_cliff_lip(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, outward: Vector3, top_y: float, color: Color, rng: RandomNumberGenerator) -> void:
-	var divisions := 5
+	var divisions := 7
 	var previous_outer := Vector3.ZERO
 	for segment in range(divisions + 1):
 		var edge_t := float(segment) / divisions
-		var width := rng.randf_range(0.22, 0.34)
+		var width := rng.randf_range(0.26, 0.38)
 		var drop := tan(deg_to_rad(27.0)) * width
 		var inner := edge_a.lerp(edge_b, edge_t)
 		inner.y = top_y + 0.006
@@ -430,12 +442,18 @@ func _append_cliff_lip(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, o
 		if segment > 0:
 			var previous_inner := edge_a.lerp(edge_b, float(segment - 1) / divisions)
 			previous_inner.y = top_y + 0.006
-			_add_triangle(surface, previous_inner, inner, outer, color)
-			_add_triangle(surface, previous_inner, outer, previous_outer, color)
+			var faded_color := color.darkened(0.16)
+			_add_gradient_triangle(surface, previous_inner, inner, outer, color, color, faded_color)
+			_add_gradient_triangle(surface, previous_inner, outer, previous_outer, color, faded_color, faded_color)
 		previous_outer = outer
 
 func refresh_cliffs() -> void:
 	_rebuild_cliffs()
+
+func _add_gradient_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color_a: Color, color_b: Color, color_c: Color) -> void:
+	for vertex in [[a, color_a], [b, color_b], [c, color_c]]:
+		surface.set_color(vertex[1])
+		surface.add_vertex(vertex[0])
 
 func _add_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color) -> void:
 	surface.set_color(color)
