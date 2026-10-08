@@ -192,6 +192,8 @@ func _rebuild_cliffs() -> void:
 		for column in range(HexGrid.COLUMNS):
 			var cell := Vector2i(column, row)
 			var cell_level := data.elevation_at(cell)
+			# Emit only high-to-low boundary edges into this shared surface. Equal- or
+			# higher-level neighbors omit their shared edge, leaving no interior walls.
 			for edge in range(6):
 				var neighbor := data.neighbor_for_edge(cell, edge)
 				var high_level: int
@@ -249,9 +251,10 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 	rng.seed = int(cell.x * 73856093) ^ int(cell.y * 19349663) ^ int(edge * 83492791)
 	# A subdivided, eroded backing wall fills the gaps behind the larger rock ribs.
 	# It keeps the face continuous while preserving the deep seams between facets.
-	var backing_depth := outward * 0.035
-	var base_a := edge_a + backing_depth
-	var base_b := edge_b + backing_depth
+	# Keep the backing exactly on the shared hex boundary; only interior wall
+	# vertices deform, so adjoining boundary faces cannot pull apart.
+	var base_a := edge_a
+	var base_b := edge_b
 	_append_cliff_backing_grid(surface, base_a, base_b, bottom_y, top_y, center, outward)
 
 	var rock_colors: Array[Color] = [
@@ -294,7 +297,7 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 			# Keep the wall's top edge flush to the hex cap, then let lower rock
 			# sections bulge and break away from the regular hex outline.
 			var bottom_fade := 0.0 if segment == 0 else clampf((top_y - segment_low) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
-			var top_fade := 0.0 if segment == vertical_segments - 1 else clampf((top_y - segment_high) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
+			var top_fade := 0.0 if segment == vertical_segments - 1 else maxf(clampf((top_y - segment_high) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0), 0.42 * clampf((segment_high - bottom_y) / maxf(wall_height, 0.08), 0.0, 1.0))
 			var ridge_fade := (bottom_fade + top_fade) * 0.5
 			# A raised ridge gives each long buttress several broad, readable planes.
 			var ridge := edge_a.lerp(edge_b, (previous_center + next_center) * 0.5 + rng.randf_range(-0.075, 0.075))
@@ -391,7 +394,7 @@ func _append_cliff_backing_grid(surface: SurfaceTool, edge_a: Vector3, edge_b: V
 		var low_y := lerpf(bottom_y, top_y, low_ratio)
 		var high_y := lerpf(bottom_y, top_y, high_ratio)
 		var low_fade := 0.0 if y_step == 0 else clampf((top_y - low_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
-		var high_fade := 0.0 if y_step == vertical_segments - 1 else clampf((top_y - high_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
+		var high_fade := 0.0 if y_step == vertical_segments - 1 else maxf(clampf((top_y - high_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0), 0.38 * clampf((high_y - bottom_y) / maxf(top_y - bottom_y, 0.08), 0.0, 1.0))
 		for x_step in range(horizontal_segments):
 			var left_ratio := float(x_step) / horizontal_segments
 			var right_ratio := float(x_step + 1) / horizontal_segments
