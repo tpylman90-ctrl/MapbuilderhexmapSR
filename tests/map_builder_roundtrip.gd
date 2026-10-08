@@ -81,9 +81,7 @@ func _run() -> void:
 		_fail("Redo did not erase the object again")
 		return
 
-	editor.call("_export_map_png", EXPORT_TEST_PATH)
-	for frame in range(3):
-		await process_frame
+	await editor.call("_export_map_png", EXPORT_TEST_PATH)
 	if not FileAccess.file_exists(EXPORT_TEST_PATH):
 		_fail("Current-view PNG export did not create an image")
 		return
