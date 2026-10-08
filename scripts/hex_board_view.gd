@@ -185,7 +185,7 @@ func _refresh_water_cell(cell: Vector2i, index: int, center: Vector3) -> void:
 	if data.terrain_at(cell) == HexGrid.Terrain.WATER:
 		transform.origin.y += CAP_HEIGHT * 0.5 + 0.014
 	else:
-		transform.basis = Basis.from_scale(Vector3.ZERO)
+		transform.basis = Basis.IDENTITY.scaled(Vector3.ZERO)
 	water_instances.set_instance_transform(index, transform)
 
 func set_water_subdivisions(value: int) -> void:
@@ -262,7 +262,7 @@ func _refresh_shoreline_cell(cell: Vector2i) -> void:
 	for edge in range(6):
 		var neighbor := data.neighbor_for_edge(cell, edge)
 		var meets_ground := not data.contains(neighbor) or data.terrain_at(neighbor) != HexGrid.Terrain.WATER
-		var transform := Transform3D(Basis.from_scale(Vector3.ZERO), center)
+		var transform := Transform3D(Basis.IDENTITY.scaled(Vector3.ZERO), center)
 		if is_water and meets_ground:
 			var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
 			transform.basis = Basis(Vector3.UP, PI * 0.5 - middle_angle)

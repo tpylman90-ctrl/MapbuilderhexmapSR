@@ -98,7 +98,14 @@ func _run() -> void:
 		return
 	grid.set_terrain(shore_neighbor, HexGrid.Terrain.WATER)
 	board_view.refresh_cell(shore_neighbor)
-	if shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length() > 0.01:
+	var reverse_edge := -1
+	for candidate_edge in range(6):
+		if grid.neighbor_for_edge(shore_neighbor, candidate_edge) == water_cell:
+			reverse_edge = candidate_edge
+	var shared_neighbor_terrain := grid.terrain_at(grid.neighbor_for_edge(water_cell, shoreline_edge))
+	var stale_shore_scale := shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length()
+	print("Shore debug cell=", water_cell, " neighbor=", shore_neighbor, " reverse_edge=", reverse_edge, " neighbor_terrain=", shared_neighbor_terrain, " scale_after_neighbor_refresh=", stale_shore_scale)
+	if stale_shore_scale > 0.01:
 		_fail("Internal water-water edges should not render shoreline foam")
 		return
 	var low_vertex_count := (water_instances.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
