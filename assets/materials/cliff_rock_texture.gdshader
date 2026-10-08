@@ -1,10 +1,10 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx, cull_disabled;
 
-uniform float macro_scale = 1.15;
-uniform float detail_scale = 5.4;
-uniform float grain_scale = 18.0;
-uniform float texture_strength = 0.34;
+uniform float macro_scale = 0.62;
+uniform float detail_scale = 2.8;
+uniform float grain_scale = 8.0;
+uniform float texture_strength = 0.24;
 
 float hash3(vec3 p) {
 	p = fract(p * 0.1031);
@@ -38,9 +38,9 @@ void fragment() {
 	float grain = value_noise(world_position * grain_scale);
 
 	float broad_tone = mix(1.0 - texture_strength, 1.0 + texture_strength, broad);
-	float detail_tone = mix(0.88, 1.12, detail);
-	float grain_tone = mix(0.94, 1.06, grain);
-	vec3 stone_tint = mix(vec3(0.91, 0.94, 0.92), vec3(1.08, 1.04, 0.97), broad);
+	float detail_tone = mix(0.92, 1.08, detail);
+	float grain_tone = mix(0.97, 1.03, grain);
+	vec3 stone_tint = mix(vec3(0.86, 0.89, 0.87), vec3(1.06, 1.02, 0.95), broad);
 
 	ALBEDO = COLOR.rgb * stone_tint * broad_tone * detail_tone * grain_tone;
 	ROUGHNESS = clamp(0.88 + (detail - 0.5) * 0.12, 0.78, 0.96);

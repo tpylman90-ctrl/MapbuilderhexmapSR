@@ -1,8 +1,8 @@
 shader_type spatial;
 render_mode unshaded, cull_disabled;
 
-uniform float macro_scale = 0.85;
-uniform float detail_scale = 9.0;
+uniform float macro_scale = 0.55;
+uniform float detail_scale = 4.2;
 
 float hash3(vec3 p) {
 	p = fract(p * 0.1031);
@@ -33,8 +33,7 @@ void fragment() {
 	vec3 world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float broad = value_noise(world_position * macro_scale);
 	float detail = value_noise(world_position * detail_scale);
-	float flecks = value_noise(world_position * detail_scale * 3.0);
-	float mottling = 0.91 + broad * 0.10 + detail * 0.07 + flecks * 0.025;
+	float mottling = 0.90 + broad * 0.14 + detail * 0.06;
 
 	ALBEDO = COLOR.rgb * mottling;
 }
