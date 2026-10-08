@@ -37,7 +37,7 @@ func _build_backing() -> void:
 	environment.background_color = Color("101813")
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color("c5bea8")
-	environment.ambient_light_energy = 0.30
+	environment.ambient_light_energy = 0.43
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
 	world.environment = environment
 	add_child(world)

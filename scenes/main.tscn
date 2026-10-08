@@ -16,3 +16,5 @@ current = true
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation = Vector3(-0.8, -0.5, 0)
 shadow_enabled = true
+light_angular_distance = 1.8
+light_energy = 0.68
