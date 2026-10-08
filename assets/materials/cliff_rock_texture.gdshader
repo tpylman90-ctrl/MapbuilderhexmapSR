@@ -1,11 +1,9 @@
 shader_type spatial;
-render_mode diffuse_burley, specular_schlick_ggx, cull_disabled;
+render_mode diffuse_toon, specular_disabled, cull_disabled;
 
-uniform float macro_scale = 0.62;
-uniform float detail_scale = 2.8;
-uniform float grain_scale = 8.0;
-uniform float texture_strength = 0.32;
-uniform float strata_strength = 0.24;
+uniform vec3 cliff_color : source_color = vec3(0.70, 0.60, 0.45);
+uniform float slope_threshold : hint_range(0.0, 1.0) = 0.68;
+uniform float blend_sharpness : hint_range(0.0, 0.2) = 0.04;
 
 float hash3(vec3 p) {
 	p = fract(p * 0.1031);
@@ -17,8 +15,7 @@ float value_noise(vec3 p) {
 	vec3 cell = floor(p);
 	vec3 local = fract(p);
 	local = local * local * (3.0 - 2.0 * local);
-
-	float c000 = hash3(cell + vec3(0.0, 0.0, 0.0));
+	float c000 = hash3(cell);
 	float c100 = hash3(cell + vec3(1.0, 0.0, 0.0));
 	float c010 = hash3(cell + vec3(0.0, 1.0, 0.0));
 	float c110 = hash3(cell + vec3(1.0, 1.0, 0.0));
@@ -26,7 +23,6 @@ float value_noise(vec3 p) {
 	float c101 = hash3(cell + vec3(1.0, 0.0, 1.0));
 	float c011 = hash3(cell + vec3(0.0, 1.0, 1.0));
 	float c111 = hash3(cell + vec3(1.0, 1.0, 1.0));
-
 	float low_plane = mix(mix(c000, c100, local.x), mix(c010, c110, local.x), local.y);
 	float high_plane = mix(mix(c001, c101, local.x), mix(c011, c111, local.x), local.y);
 	return mix(low_plane, high_plane, local.z);
@@ -34,19 +30,17 @@ float value_noise(vec3 p) {
 
 void fragment() {
 	vec3 world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	float broad = value_noise(world_position * macro_scale);
-	float detail = value_noise(world_position * detail_scale);
-	float grain = value_noise(world_position * grain_scale);
-	// UV Y follows cliff height while UV X follows the wall, so stretched noise
-	// reads as long mineral bands instead of mottled noise on a vertical face.
-	float strata = value_noise(vec3(UV.x * 3.4, UV.y * 0.24, 0.0));
+	vec3 world_normal = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	float slope = dot(world_normal, vec3(0.0, 1.0, 0.0));
+	float top_blend = smoothstep(slope_threshold - blend_sharpness, slope_threshold + blend_sharpness, slope);
 
-	float broad_tone = mix(1.0 - texture_strength, 1.0 + texture_strength, broad);
-	float detail_tone = mix(0.88, 1.12, detail);
-	float grain_tone = mix(0.97, 1.03, grain);
-	vec3 stone_tint = mix(vec3(0.90, 0.77, 0.57), vec3(1.08, 1.00, 0.82), broad);
-	float strata_tone = mix(1.0 - strata_strength, 1.0 + strata_strength, strata);
-
-	ALBEDO = COLOR.rgb * stone_tint * broad_tone * detail_tone * grain_tone * strata_tone;
-	ROUGHNESS = clamp(0.88 + (detail - 0.5) * 0.12, 0.78, 0.96);
+	// Broad color blocks follow the hand-built facets; low crevice values fake contact shade
+	// on the Mobile renderer, where screen-space ambient occlusion is unavailable.
+	float broad_facet = value_noise(world_position * vec3(0.75, 0.38, 0.75));
+	float crevice_shade = mix(0.78, 1.08, broad_facet);
+	vec3 vertex_stone = mix(cliff_color, COLOR.rgb, 0.48);
+	vec3 faceted_rock = vertex_stone * crevice_shade;
+	vec3 upper_edge = COLOR.rgb * mix(0.96, 1.04, broad_facet);
+	ALBEDO = mix(faceted_rock, upper_edge, top_blend * 0.65);
+	ROUGHNESS = 0.94;
 }
