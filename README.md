@@ -7,10 +7,10 @@ A standalone Godot 4.7 mobile-friendly hex map builder. The editor opens on a 64
 The side panel is divided into three workspaces:
 
 - **Terrain** — raise, lower, flatten, smooth, build hills and ridges, choose a 1–8 hex brush, paint Grass, Dirt, Stone, Water, Sand, Snow, Mud, or Road, sample a tile, and fill the ground layer.
-- **Objects** — stamp the supplied Cartoon House model or low-poly Oak Tree, Pine, and Boulder props. Rotate and scale the next stamp, or use Erase Object to remove a placed item. Object placement and removal support Undo and Redo.
-- **Map** — save and load portable .hexmap files, generate an island or highlands layout, start a blank map, toggle hex outlines, grass detail, and distant haze; tune ground and cliff texture detail; and select low, balanced, or high animated water mesh detail plus one of eight water flow directions. The default presentation adds a warm sun, soft shadows, and distance haze.
+- **Objects** — stamp the supplied Cartoon House model or low-poly Oak Tree, Pine, and Boulder props. Add named, camera-facing location pins for settlements, dungeons, and landmarks. Rotate and scale stamps, or erase them. Placement and removal support Undo and Redo.
+- **Map** — save and load portable .hexmap files, export the current map view as a PNG, generate island or highlands layouts, start a blank map, toggle hex outlines, grass detail, and distant haze; tune ground and cliff texture detail; and select low, balanced, or high animated water mesh detail plus one of eight water flow directions. The default presentation adds a warm sun, soft shadows, and distance haze.
 
-Map files store the board dimensions, elevation, terrain ids, and placed objects. They are saved through Godot's user:// file picker so builds can read and write them on Android. Map generation replaces terrain and elevation as one undoable operation. A blank-map reset clears the current undo history.
+Map files store the board dimensions, elevation, terrain ids, placed objects, and named map labels. They are saved through Godot's user:// file picker so builds can read and write them on Android. Map generation replaces terrain and elevation as one undoable operation. A blank-map reset clears the current undo history.
 
 ## Terrain rendering
 

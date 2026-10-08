@@ -43,6 +43,9 @@ var _sample_button: Button
 var _placeable_button: Button
 var _object_buttons: Array[Button] = []
 var _placed_objects: Array[Node3D] = []
+var _marker_label_input: LineEdit
+var _export_dialog: FileDialog
+var _editor_layer: CanvasLayer
 var _active_object_type := "house"
 var _object_rotation_degrees := 0.0
 var _object_scale := 1.0
@@ -81,6 +84,7 @@ func _ready() -> void:
 func _build_editor_ui() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 10
+	_editor_layer = layer
 	add_child(layer)
 	var panel := PanelContainer.new()
 	panel.name = "EditorPanel"
@@ -204,7 +208,15 @@ func _build_editor_ui() -> void:
 	_add_object_button(object_grid, "Oak Tree", "oak")
 	_add_object_button(object_grid, "Pine", "pine")
 	_add_object_button(object_grid, "Boulder", "boulder")
+	_add_object_button(object_grid, "Marker / Label", "marker")
 	_add_object_button(object_grid, "Erase Object", "erase")
+	_add_section_title(objects_page, "LOCATION LABEL")
+	_marker_label_input = LineEdit.new()
+	_marker_label_input.text = "Landmark"
+	_marker_label_input.placeholder_text = "Settlement, dungeon, or landmark"
+	_marker_label_input.max_length = 36
+	_marker_label_input.text_changed.connect(func(_text: String): _update_tool_status())
+	objects_page.add_child(_marker_label_input)
 	_add_section_title(objects_page, "STAMP TRANSFORM")
 	var transform_row := HBoxContainer.new()
 	objects_page.add_child(transform_row)
@@ -215,7 +227,7 @@ func _build_editor_ui() -> void:
 	_make_button(scale_row, "Scale −", func(): _scale_stamp(0.85))
 	_make_button(scale_row, "Scale +", func(): _scale_stamp(1.18))
 	var object_help := Label.new()
-	object_help.text = "Choose a stamp, then tap a hex to place it. Rotate and scale apply to the next stamp. Erase Object removes a placed item at the tapped hex."
+	object_help.text = "Choose a stamp, then tap a hex to place it. Name and place map labels for settlements, dungeons, or landmarks. Rotate and scale apply to the next stamp."
 	object_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	object_help.add_theme_color_override("font_color", Color("a7ada5"))
 	objects_page.add_child(object_help)
@@ -229,6 +241,7 @@ func _build_editor_ui() -> void:
 	map_page.add_child(file_row)
 	_make_button(file_row, "Save…", _open_save_dialog)
 	_make_button(file_row, "Load…", _open_load_dialog)
+	_make_button(map_page, "Export Current View as PNG…", _open_export_dialog)
 	var file_help := Label.new()
 	file_help.text = "Save the full map, terrain, elevation, and object stamps as a portable .hexmap file."
 	file_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -354,6 +367,15 @@ func _build_editor_ui() -> void:
 	_load_dialog = _make_map_file_dialog(FileDialog.FILE_MODE_OPEN_FILE)
 	_load_dialog.file_selected.connect(_request_load_map)
 	layer.add_child(_load_dialog)
+	_export_dialog = FileDialog.new()
+	_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	_export_dialog.access = FileDialog.ACCESS_USERDATA
+	_export_dialog.current_dir = "user://"
+	_export_dialog.current_file = "HexFoundry.png"
+	_export_dialog.filters = PackedStringArray(["*.png ; PNG Image"])
+	_export_dialog.size = Vector2(640.0, 480.0)
+	_export_dialog.file_selected.connect(_export_map_png)
+	layer.add_child(_export_dialog)
 	_load_confirmation = ConfirmationDialog.new()
 	_load_confirmation.title = "Load map"
 	_load_confirmation.confirmed.connect(func(): _load_map_file(_pending_load_path))
@@ -395,10 +417,27 @@ func _open_save_dialog() -> void:
 func _open_load_dialog() -> void:
 	_load_dialog.popup_centered()
 
+func _open_export_dialog() -> void:
+	_export_dialog.popup_centered()
+
 func _request_load_map(path: String) -> void:
 	_pending_load_path = path
 	_load_confirmation.dialog_text = "Replace the current board with %s? Save the current map first if you want to keep it." % path.get_file()
 	_load_confirmation.popup_centered()
+
+func _export_map_png(path: String) -> void:
+	var ui_was_visible := _editor_layer.visible
+	_editor_layer.visible = false
+	await RenderingServer.frame_post_draw
+	var image := get_viewport().get_texture().get_image()
+	_editor_layer.visible = ui_was_visible
+	var final_path := path if path.get_extension().to_lower() == "png" else path + ".png"
+	var error := image.save_png(final_path)
+	if error != OK:
+		tool_status.text = "PNG export failed: %s" % error_string(error)
+		return
+	tool_status.text = "Exported current view to %s" % final_path.get_file()
+	_update_readout()
 
 func _build_camera_hud(layer: CanvasLayer) -> void:
 	var hud := PanelContainer.new()
@@ -557,6 +596,7 @@ func _object_label(object_kind: String) -> String:
 		"oak": return "Oak Tree"
 		"pine": return "Pine"
 		"boulder": return "Boulder"
+		"marker": return "Map Label"
 		"erase": return "Erase Object"
 		_: return object_kind.capitalize()
 
@@ -566,6 +606,9 @@ func _update_tool_status() -> void:
 	if mode == EditMode.PLACEABLE:
 		if _active_object_type == "erase":
 			tool_status.text = "Tap a placed object to erase it"
+		elif _active_object_type == "marker":
+			var label_text := _marker_label_input.text.strip_edges() if _marker_label_input != null else "Landmark"
+			tool_status.text = "Place map label: %s" % (label_text if not label_text.is_empty() else "Landmark")
 		else:
 			tool_status.text = "Stamp: %s  •  %d°  •  %d%%" % [_object_label(_active_object_type), roundi(_object_rotation_degrees), roundi(_object_scale * 100.0)]
 		return
@@ -664,7 +707,7 @@ func _apply_at_screen(screen_position: Vector2) -> void:
 	_last_stroke_cell = cell
 	_update_readout()
 
-func _place_active_object(cell: Vector2i, record_history: bool = true, object_kind: String = "", rotation_degrees: float = -1.0, object_scale: float = -1.0) -> Node3D:
+func _place_active_object(cell: Vector2i, record_history: bool = true, object_kind: String = "", rotation_degrees: float = -1.0, object_scale: float = -1.0, object_label: String = "") -> Node3D:
 	var kind := _active_object_type if object_kind.is_empty() else object_kind
 	if kind == "erase":
 		_erase_object_at(cell)
@@ -687,6 +730,16 @@ func _place_active_object(cell: Vector2i, record_history: bool = true, object_ki
 	node.set_meta("map_cell", cell)
 	node.set_meta("map_object_scale", scale_factor)
 	node.set_meta("map_object_rotation", rotation)
+	if kind == "marker":
+		var label_text := object_label.strip_edges()
+		if label_text.is_empty() and _marker_label_input != null:
+			label_text = _marker_label_input.text.strip_edges()
+		if label_text.is_empty():
+			label_text = "Landmark"
+		node.set_meta("map_object_label", label_text)
+		var marker_label := node.get_node_or_null("MarkerLabel") as Label3D
+		if marker_label != null:
+			marker_label.text = label_text
 	board_view.add_child(node)
 	_placed_objects.append(node)
 	if record_history:
@@ -746,6 +799,31 @@ func _create_placeable_node(kind: String) -> Node3D:
 			rock.radial_segments = 5
 			rock.rings = 3
 			_add_object_mesh(root, rock, Vector3(0.0, 0.30, 0.0), Color("77776d"), Vector3(1.25, 0.78, 0.92))
+		"marker":
+			var pin := CylinderMesh.new()
+			pin.top_radius = 0.0
+			pin.bottom_radius = 0.13
+			pin.height = 0.34
+			pin.radial_segments = 7
+			_add_object_mesh(root, pin, Vector3(0.0, 0.17, 0.0), Color("d9a94f"))
+			var pin_head := SphereMesh.new()
+			pin_head.radius = 0.18
+			pin_head.height = 0.31
+			pin_head.radial_segments = 8
+			pin_head.rings = 4
+			_add_object_mesh(root, pin_head, Vector3(0.0, 0.40, 0.0), Color("e5c873"))
+			var place_label := Label3D.new()
+			place_label.name = "MarkerLabel"
+			place_label.text = "Landmark"
+			place_label.position = Vector3(0.0, 0.68, 0.0)
+			place_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			place_label.no_depth_test = true
+			place_label.font_size = 36
+			place_label.pixel_size = 0.006
+			place_label.modulate = Color("f6e8c3")
+			place_label.outline_modulate = Color("29332b")
+			place_label.outline_size = 10
+			root.add_child(place_label)
 		_:
 			root.free()
 			return null
@@ -1065,7 +1143,8 @@ func _save_map_file(path: String) -> void:
 			"x": cell.x,
 			"y": cell.y,
 			"rotation": float(node.get_meta("map_object_rotation", 0.0)),
-			"scale": float(node.get_meta("map_object_scale", 1.0))
+			"scale": float(node.get_meta("map_object_scale", 1.0)),
+			"label": str(node.get_meta("map_object_label", ""))
 		})
 	var payload := {
 		"format_version": 1,
@@ -1125,14 +1204,15 @@ func _load_map_file(path: String) -> void:
 			var record: Dictionary = record_variant
 			var cell := Vector2i(int(record.get("x", -1)), int(record.get("y", -1)))
 			var kind := str(record.get("type", ""))
-			if not grid.contains(cell) or not ["house", "oak", "pine", "boulder"].has(kind):
+			if not grid.contains(cell) or not ["house", "oak", "pine", "boulder", "marker"].has(kind):
 				continue
 			_place_active_object(
 				cell,
 				false,
 				kind,
 				float(record.get("rotation", 0.0)),
-				clampf(float(record.get("scale", 1.0)), 0.55, 2.4)
+				clampf(float(record.get("scale", 1.0)), 0.55, 2.4),
+				str(record.get("label", "Landmark"))
 			)
 	_stroke_before.clear()
 	_stroke_visited.clear()

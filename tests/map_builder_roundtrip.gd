@@ -1,6 +1,7 @@
 extends SceneTree
 
 const TEST_PATH := "user://mapbuilder_roundtrip_test.hexmap"
+const EXPORT_TEST_PATH := "user://mapbuilder_export_test.png"
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -36,6 +37,11 @@ func _run() -> void:
 	if object == null:
 		_fail("Could not place the procedural pine stamp")
 		return
+	var marker_cell := Vector2i(22, 40)
+	var marker := editor.call("_place_active_object", marker_cell, false, "marker", 0.0, 1.0, "Crossroads") as Node3D
+	if marker == null or str(marker.get_meta("map_object_label", "")) != "Crossroads":
+		_fail("Could not place a named map marker")
+		return
 	editor.call("_save_map_file", TEST_PATH)
 	if not FileAccess.file_exists(TEST_PATH):
 		_fail("Map save did not create a file")
@@ -49,12 +55,17 @@ func _run() -> void:
 		_fail("Map round-trip lost terrain or elevation data")
 		return
 	var placed_objects: Array = editor.get("_placed_objects")
-	if placed_objects.size() != 1:
-		_fail("Map round-trip did not restore its placed object")
+	if placed_objects.size() != 2:
+		_fail("Map round-trip did not restore the object stamp and marker")
 		return
 	var restored := placed_objects[0] as Node3D
 	if not restored.visible or str(restored.get_meta("map_object_type")) != "pine":
 		_fail("Restored object metadata is incorrect")
+		return
+	var restored_marker := placed_objects[1] as Node3D
+	var restored_label := restored_marker.get_node_or_null("MarkerLabel") as Label3D
+	if restored_label == null or restored_label.text != "Crossroads":
+		_fail("Map round-trip did not preserve the location label")
 		return
 
 	editor.call("_erase_object_at", cell)
@@ -68,6 +79,13 @@ func _run() -> void:
 	editor.call("_redo")
 	if restored.visible:
 		_fail("Redo did not erase the object again")
+		return
+
+	editor.call("_export_map_png", EXPORT_TEST_PATH)
+	for frame in range(3):
+		await process_frame
+	if not FileAccess.file_exists(EXPORT_TEST_PATH):
+		_fail("Current-view PNG export did not create an image")
 		return
 
 	var water_cell := Vector2i(21, 40)
@@ -128,7 +146,8 @@ func _run() -> void:
 		return
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_PATH))
-	print("Map builder round-trip, object history, and island generation passed.")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(EXPORT_TEST_PATH))
+	print("Map builder round-trip, object history, named markers, PNG export, and island generation passed.")
 	quit(0)
 
 func _fail(message: String) -> void:
