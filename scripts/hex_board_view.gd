@@ -19,9 +19,10 @@ var cliff_noise := FastNoiseLite.new()
 
 func initialize(grid_data: HexGrid) -> void:
 	data = grid_data
-	cliff_noise.noise_type = FastNoiseLite.TYPE_PERLIN
-	cliff_noise.frequency = 1.4
-	cliff_noise.fractal_octaves = 2
+	cliff_noise.noise_type = FastNoiseLite.TYPE_CELLULAR
+	cliff_noise.frequency = 0.42
+	cliff_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	cliff_noise.fractal_octaves = 3
 	_build_backing()
 	_build_tile_mesh()
 	_build_selection_outline()
@@ -242,19 +243,12 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 	# Seed each edge from its cell so sculpting and undo rebuild the same rock.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(cell.x * 73856093) ^ int(cell.y * 19349663) ^ int(edge * 83492791)
-	# Dark backing remains visible in the narrow seams between the larger broken
-	# rock plates. This avoids the regular, small diamond pattern of the old grid.
+	# A subdivided, eroded backing wall fills the gaps behind the larger rock ribs.
+	# It keeps the face continuous while preserving the deep seams between facets.
 	var backing_depth := outward * 0.035
 	var base_a := edge_a + backing_depth
 	var base_b := edge_b + backing_depth
-	var top_a := base_a
-	var top_b := base_b
-	base_a.y = bottom_y
-	base_b.y = bottom_y
-	top_a.y = top_y
-	top_b.y = top_y
-	_add_side_triangle(surface, base_a, top_a, top_b, Color("353832"))
-	_add_side_triangle(surface, base_a, top_b, base_b, Color("292c27"))
+	_append_cliff_backing_grid(surface, base_a, base_b, bottom_y, top_y, center, outward)
 
 	var rock_colors: Array[Color] = [
 		Color("3d403c"), Color("4a4c46"), Color("5d5b52"),
@@ -267,7 +261,7 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 	# Two wide, offset rock ribs read as fractured mountain masses instead of
 	# a row of narrow basalt-like columns.
 	var buttress_count := 2
-	var vertical_segments := clampi(ceili(wall_height / 0.62), 3, 10)
+	var vertical_segments := clampi(ceili(wall_height / 0.40), 6, 14)
 	var centers: Array[float] = []
 	var widths: Array[float] = []
 	var depths: Array[float] = []
@@ -379,9 +373,40 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 
 func _cliff_vertex_breakup(point: Vector3, center: Vector3, outward: Vector3, fade: float) -> Vector3:
 	var radial := Vector3(point.x - center.x, 0.0, point.z - center.z).normalized()
-	var broad_noise := cliff_noise.get_noise_3d(point.x, point.y * 0.72, point.z)
-	var fine_noise := cliff_noise.get_noise_3d(point.x + 19.7, point.y * 1.35, point.z - 8.3)
-	return (radial * broad_noise * 0.14 + outward * fine_noise * 0.07) * fade
+	# Higher horizontal sampling and a stretched vertical axis form broken strata.
+	var broad_noise := cliff_noise.get_noise_3d(point.x * 3.5, point.y * 8.75, point.z * 3.5)
+	var fine_noise := cliff_noise.get_noise_3d((point.x + 19.7) * 6.0, (point.y - 3.1) * 12.0, (point.z - 8.3) * 6.0)
+	return (radial * broad_noise * 0.18 + outward * fine_noise * 0.08) * fade
+
+func _append_cliff_backing_grid(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, bottom_y: float, top_y: float, center: Vector3, outward: Vector3) -> void:
+	var horizontal_segments := 8
+	var vertical_segments := clampi(ceili((top_y - bottom_y) / 0.38), 6, 14)
+	for y_step in range(vertical_segments):
+		var low_ratio := float(y_step) / vertical_segments
+		var high_ratio := float(y_step + 1) / vertical_segments
+		var low_y := lerpf(bottom_y, top_y, low_ratio)
+		var high_y := lerpf(bottom_y, top_y, high_ratio)
+		var low_fade := clampf((top_y - low_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
+		var high_fade := clampf((top_y - high_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
+		for x_step in range(horizontal_segments):
+			var left_ratio := float(x_step) / horizontal_segments
+			var right_ratio := float(x_step + 1) / horizontal_segments
+			var low_left := edge_a.lerp(edge_b, left_ratio)
+			var low_right := edge_a.lerp(edge_b, right_ratio)
+			var high_left := edge_a.lerp(edge_b, left_ratio)
+			var high_right := edge_a.lerp(edge_b, right_ratio)
+			low_left.y = low_y
+			low_right.y = low_y
+			high_left.y = high_y
+			high_right.y = high_y
+			low_left += _cliff_vertex_breakup(low_left, center, outward, low_fade)
+			low_right += _cliff_vertex_breakup(low_right, center, outward, low_fade)
+			high_left += _cliff_vertex_breakup(high_left, center, outward, high_fade)
+			high_right += _cliff_vertex_breakup(high_right, center, outward, high_fade)
+			var shade := 0.90 + cliff_noise.get_noise_3d(low_left.x * 1.7, low_y, low_left.z * 1.7) * 0.10
+			var rock_color := Color("343832").darkened(1.0 - shade)
+			_add_side_triangle(surface, low_left, high_left, high_right, rock_color)
+			_add_side_triangle(surface, low_left, high_right, low_right, rock_color.darkened(0.07))
 
 func _add_side_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color) -> void:
 	# Side UVs tile across the wall and rise with elevation, avoiding one stretched
