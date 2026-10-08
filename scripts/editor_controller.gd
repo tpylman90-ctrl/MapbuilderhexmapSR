@@ -695,7 +695,7 @@ func _create_placeable_node(kind: String) -> Node3D:
 			pine_trunk.radial_segments = 6
 			_add_object_mesh(root, pine_trunk, Vector3(0.0, 0.74, 0.0), Color("74513a"))
 			for tier in range(3):
-				var cone := ConeMesh.new()
+				var cone := CylinderMesh.new()
 				cone.top_radius = 0.0
 				cone.bottom_radius = 0.43 - float(tier) * 0.055
 				cone.height = 0.78
