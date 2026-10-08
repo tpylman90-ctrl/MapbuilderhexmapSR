@@ -267,11 +267,9 @@ func _refresh_shoreline_cell(cell: Vector2i) -> void:
 		var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
 		var basis := Basis(Vector3.UP, PI * 0.5 - middle_angle)
 		if not is_shore:
-			basis = basis.scaled(Vector3.ONE * 0.02)
+			basis = basis.scaled(Vector3.ONE * 0.1)
 		var transform := Transform3D(basis, center)
 		var instance_index := index * 6 + edge
-		if cell == Vector2i(21, 40) and edge == 0:
-			print("Shore write is_shore=", is_shore, " terrain=", data.terrain_at(neighbor), " transform_scale=", basis.get_scale())
 		shoreline_instances.set_instance_transform(instance_index, transform)
 		shoreline_instances.set_instance_color(instance_index, Color.WHITE if is_shore else Color(1.0, 1.0, 1.0, 0.0))
 
