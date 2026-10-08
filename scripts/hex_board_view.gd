@@ -299,14 +299,16 @@ func _append_organic_cliff_face(surface: SurfaceTool, ledge_surface: SurfaceTool
 			var bottom_fade := 0.0 if segment == 0 else clampf((top_y - segment_low) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
 			var top_fade := 0.0 if segment == vertical_segments - 1 else maxf(clampf((top_y - segment_high) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0), 0.42 * clampf((segment_high - bottom_y) / maxf(wall_height, 0.08), 0.0, 1.0))
 			var ridge_fade := (bottom_fade + top_fade) * 0.5
+			var segment_height_ratio := clampf(((segment_low + segment_high) * 0.5 - bottom_y) / maxf(wall_height, 0.08), 0.0, 1.0)
+			var mass_profile := lerpf(0.48, 1.0, pow(maxf(sin(PI * segment_height_ratio), 0.0), 0.72))
 			# A raised ridge gives each long buttress several broad, readable planes.
 			var ridge := edge_a.lerp(edge_b, (previous_center + next_center) * 0.5 + rng.randf_range(-0.075, 0.075))
 			ridge.y = (segment_low + segment_high) * 0.5 + rng.randf_range(-0.12, 0.12) * ridge_fade
-			ridge += outward * (maxf(previous_depth, next_depth) + rng.randf_range(-0.10, 0.12)) * ridge_fade
-			left_bottom += outward * (previous_depth + rng.randf_range(-0.085, 0.085)) * bottom_fade
-			right_bottom += outward * (previous_depth * rng.randf_range(0.72, 1.12) + rng.randf_range(-0.085, 0.085)) * bottom_fade
-			left_top += outward * (next_depth * rng.randf_range(0.72, 1.12) + rng.randf_range(-0.085, 0.085)) * top_fade
-			right_top += outward * (next_depth + rng.randf_range(-0.085, 0.085)) * top_fade
+			ridge += outward * (maxf(previous_depth, next_depth) + rng.randf_range(-0.10, 0.12)) * ridge_fade * mass_profile
+			left_bottom += outward * (previous_depth + rng.randf_range(-0.085, 0.085)) * bottom_fade * mass_profile
+			right_bottom += outward * (previous_depth * rng.randf_range(0.72, 1.12) + rng.randf_range(-0.085, 0.085)) * bottom_fade * mass_profile
+			left_top += outward * (next_depth * rng.randf_range(0.72, 1.12) + rng.randf_range(-0.085, 0.085)) * top_fade * mass_profile
+			right_top += outward * (next_depth + rng.randf_range(-0.085, 0.085)) * top_fade * mass_profile
 			left_bottom.y += rng.randf_range(-0.07, 0.07) * bottom_fade
 			right_bottom.y += rng.randf_range(-0.07, 0.07) * bottom_fade
 			left_top.y += rng.randf_range(-0.07, 0.07) * top_fade
@@ -395,6 +397,12 @@ func _append_cliff_backing_grid(surface: SurfaceTool, edge_a: Vector3, edge_b: V
 		var high_y := lerpf(bottom_y, top_y, high_ratio)
 		var low_fade := 0.0 if y_step == 0 else clampf((top_y - low_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0)
 		var high_fade := 0.0 if y_step == vertical_segments - 1 else maxf(clampf((top_y - high_y) / maxf(STEP_HEIGHT * 1.2, 0.08), 0.0, 1.0), 0.38 * clampf((high_y - bottom_y) / maxf(top_y - bottom_y, 0.08), 0.0, 1.0))
+		# The uploaded cliff chunk has a broad middle and tapered ends. Shape the
+		# procedural breakup the same way instead of repeating its full mesh.
+		var low_height_ratio := clampf((low_y - bottom_y) / maxf(top_y - bottom_y, 0.08), 0.0, 1.0)
+		var high_height_ratio := clampf((high_y - bottom_y) / maxf(top_y - bottom_y, 0.08), 0.0, 1.0)
+		var low_mass := lerpf(0.48, 1.0, pow(maxf(sin(PI * low_height_ratio), 0.0), 0.72))
+		var high_mass := lerpf(0.48, 1.0, pow(maxf(sin(PI * high_height_ratio), 0.0), 0.72))
 		for x_step in range(horizontal_segments):
 			var left_ratio := float(x_step) / horizontal_segments
 			var right_ratio := float(x_step + 1) / horizontal_segments
@@ -408,10 +416,10 @@ func _append_cliff_backing_grid(surface: SurfaceTool, edge_a: Vector3, edge_b: V
 			high_right.y = high_y
 			var left_seam_fade := clampf(minf(left_ratio, 1.0 - left_ratio) * 3.0, 0.0, 1.0)
 			var right_seam_fade := clampf(minf(right_ratio, 1.0 - right_ratio) * 3.0, 0.0, 1.0)
-			low_left += _cliff_vertex_breakup(low_left, center, outward, low_fade * left_seam_fade)
-			low_right += _cliff_vertex_breakup(low_right, center, outward, low_fade * right_seam_fade)
-			high_left += _cliff_vertex_breakup(high_left, center, outward, high_fade * left_seam_fade)
-			high_right += _cliff_vertex_breakup(high_right, center, outward, high_fade * right_seam_fade)
+			low_left += _cliff_vertex_breakup(low_left, center, outward, low_fade * low_mass * left_seam_fade)
+			low_right += _cliff_vertex_breakup(low_right, center, outward, low_fade * low_mass * right_seam_fade)
+			high_left += _cliff_vertex_breakup(high_left, center, outward, high_fade * high_mass * left_seam_fade)
+			high_right += _cliff_vertex_breakup(high_right, center, outward, high_fade * high_mass * right_seam_fade)
 			var shade := 0.90 + cliff_noise.get_noise_3d(low_left.x * 1.7, low_y, low_left.z * 1.7) * 0.10
 			var rock_color := Color("343832").darkened(1.0 - shade)
 			_add_side_triangle(surface, low_left, high_left, high_right, rock_color)
