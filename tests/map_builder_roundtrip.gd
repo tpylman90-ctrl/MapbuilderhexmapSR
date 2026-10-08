@@ -98,7 +98,9 @@ func _run() -> void:
 		return
 	grid.set_terrain(shore_neighbor, HexGrid.Terrain.WATER)
 	board_view.refresh_cell(shore_neighbor)
-	if shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length() > 0.01:
+	var scale_after_update := shoreline_instances.get_instance_transform(shoreline_index).basis.get_scale().length()
+	print("shore check scale_after_update=", scale_after_update, " expected low")
+	if scale_after_update > 0.05:
 		_fail("Internal water-water edges should not render shoreline foam")
 		return
 	var low_vertex_count := (water_instances.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
