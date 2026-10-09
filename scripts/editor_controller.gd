@@ -2062,10 +2062,11 @@ func _resnap_all_objects() -> void:
 func _set_placeable_materials(node: Node) -> void:
 	if node is MeshInstance3D:
 		var mesh_instance := node as MeshInstance3D
-		var material := StandardMaterial3D.new()
-		material.vertex_color_use_as_albedo = true
-		material.roughness = 0.92
-		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		var material := ShaderMaterial.new()
+		material.shader = load("res://assets/materials/prop_surface.gdshader") as Shader
+		material.set_shader_parameter("use_vertex_color", true)
+		material.set_shader_parameter("surface_style", 0)
+		material.set_shader_parameter("detail_strength", 0.42)
 		mesh_instance.material_override = material
 		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	for child in node.get_children():
