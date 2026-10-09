@@ -44,19 +44,16 @@ void fragment() {
 	float grain = tri_noise(p, n, 46.0);
 	float pattern = 0.5;
 	float rough = 0.88;
-	float relief = 0.0;
 
 	if (surface_style == 0) { // cut stone: mottled mineral flecks, courses, occasional hairline joints
 		float course = smoothstep(0.47, 0.51, abs(fract((p.y + broad * 0.07) * 2.1) - 0.5));
 		float fleck = smoothstep(0.68, 0.90, fine);
 		pattern = 0.74 + (broad - 0.5) * 0.30 + (fine - 0.5) * 0.22 + fleck * 0.10 - course * 0.08;
-		relief = (fine - 0.5) * 0.035;
 		rough = 0.91;
 	} else if (surface_style == 1) { // timber: long grain and dark seams
 		float g = noise3(vec3(p.x * 3.0 + noise3(p * 4.0), p.y * 31.0, p.z * 3.0));
 		float seam = smoothstep(0.47, 0.50, abs(fract(p.y * 4.0 + broad * 0.12) - 0.5));
 		pattern = 0.69 + (g - 0.5) * 0.34 + (broad - 0.5) * 0.16 - seam * 0.10;
-		relief = (g - 0.5) * 0.025;
 		rough = 0.86;
 	} else if (surface_style == 2) { // foliage: overlapping tonal clusters
 		float clusters = smoothstep(0.30, 0.72, tri_noise(p, n, 5.2));
@@ -66,7 +63,6 @@ void fragment() {
 		float row = smoothstep(0.46, 0.50, abs(fract((p.y + p.x * 0.10) * 5.0 + broad * 0.06) - 0.5));
 		float tile = smoothstep(0.46, 0.50, abs(fract(p.x * 3.2) - 0.5));
 		pattern = 0.75 + (broad - 0.5) * 0.24 + (fine - 0.5) * 0.12 - row * 0.10 - tile * 0.055;
-		relief = -(row + tile) * 0.018;
 		rough = 0.83;
 	} else { // worked metal: brushed anisotropic streaks
 		float brush = noise3(vec3(p.x * 48.0, p.y * 5.0, p.z * 9.0));
@@ -78,5 +74,4 @@ void fragment() {
 	ALBEDO = base_color.rgb * value;
 	ROUGHNESS = rough;
 	SPECULAR = surface_style == 4 ? 0.42 : 0.18;
-	NORMAL = normalize(n + vec3(relief, relief * 0.65, -relief));
 }
