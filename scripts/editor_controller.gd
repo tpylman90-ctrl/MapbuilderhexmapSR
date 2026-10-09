@@ -916,8 +916,20 @@ func _create_placeable_node(kind: String) -> Node3D:
 			barrel.top_radius = 0.19
 			barrel.bottom_radius = 0.16
 			barrel.height = 0.42
-			barrel.radial_segments = 8
-			_add_object_mesh(root, barrel, Vector3(-1.05, 0.22, 0.76), Color("795638"))
+			barrel.radial_segments = 12
+			_add_object_mesh(root, barrel, Vector3(-1.05, 0.22, 0.76), Color("795638"), Vector3.ONE, 1)
+			for hoop_y in [0.09, 0.34]:
+				var hoop := TorusMesh.new()
+				hoop.inner_radius = 0.172
+				hoop.outer_radius = 0.192
+				var hoop_node := _add_object_mesh(root, hoop, Vector3(-1.05, hoop_y, 0.76), Color("686b68"), Vector3.ONE, 4)
+				hoop_node.rotation.x = PI * 0.5
+			var barrel_lid := CylinderMesh.new()
+			barrel_lid.top_radius = 0.15
+			barrel_lid.bottom_radius = 0.15
+			barrel_lid.height = 0.025
+			barrel_lid.radial_segments = 12
+			_add_object_mesh(root, barrel_lid, Vector3(-1.05, 0.435, 0.76), Color("9b774e"), Vector3.ONE, 1)
 		"chapel":
 			_add_building_shell(root, Vector3(1.66, 1.46, 2.50), 0.48, Color("b3ab99"), Color("51453e"), Color("40352f"))
 			var tower := BoxMesh.new()
@@ -977,10 +989,21 @@ func _create_placeable_node(kind: String) -> Node3D:
 			hub.rings = 4
 			_add_object_mesh(root, hub, Vector3(0.0, 1.92, 0.53), Color("705438"))
 			for blade_index in range(4):
+				var blade_angle := TAU * float(blade_index) / 4.0
 				var blade := BoxMesh.new()
 				blade.size = Vector3(0.16, 1.12, 0.07)
-				var blade_node := _add_object_mesh(root, blade, Vector3(0.0, 1.92, 0.58), Color("d4c29d"))
-				blade_node.rotation.z = TAU * float(blade_index) / 4.0
+				var blade_node := _add_object_mesh(root, blade, Vector3(0.0, 1.92, 0.58), Color("d4c29d"), Vector3.ONE, 1)
+				blade_node.rotation.z = blade_angle
+				var sail_panel := BoxMesh.new()
+				sail_panel.size = Vector3(0.34, 0.52, 0.035)
+				var sail_node := _add_object_mesh(root, sail_panel, Vector3(0.0, 2.38, 0.62), Color("e1d3b3"), Vector3.ONE, 3)
+				sail_node.rotation.z = blade_angle
+			var mill_door := BoxMesh.new()
+			mill_door.size = Vector3(0.32, 0.62, 0.08)
+			_add_object_mesh(root, mill_door, Vector3(0.0, 0.35, 0.64), Color("604833"), Vector3.ONE, 1)
+			var door_lintel := BoxMesh.new()
+			door_lintel.size = Vector3(0.48, 0.09, 0.12)
+			_add_object_mesh(root, door_lintel, Vector3(0.0, 0.70, 0.65), Color("817052"), Vector3.ONE, 0)
 		"fortress":
 			var hill_ring := _castle_ring_points(4.35, 3.55, Vector2.ZERO, 0.12)
 			_add_castle_wall_ring(root, hill_ring, 1.35, 1.82, 0.48, true, Color("77776d"))
@@ -1656,7 +1679,29 @@ func _create_placeable_node(kind: String) -> Node3D:
 			_add_object_mesh(root, well_beam, Vector3(0.0, 1.34, 0.0), Color("765538"))
 			var well_roof := PrismMesh.new()
 			well_roof.size = Vector3(1.35, 0.70, 1.00)
-			_add_object_mesh(root, well_roof, Vector3(0.0, 1.70, 0.0), Color("514039"))
+			_add_object_mesh(root, well_roof, Vector3(0.0, 1.70, 0.0), Color("514039"), Vector3.ONE, 3)
+			var well_water := CylinderMesh.new()
+			well_water.top_radius = 0.30
+			well_water.bottom_radius = 0.30
+			well_water.height = 0.018
+			well_water.radial_segments = 12
+			_add_object_mesh(root, well_water, Vector3(0.0, 0.36, 0.0), Color("315f68"), Vector3.ONE, 4)
+			var winch := CylinderMesh.new()
+			winch.top_radius = 0.065
+			winch.bottom_radius = 0.065
+			winch.height = 1.08
+			winch.radial_segments = 8
+			var winch_node := _add_object_mesh(root, winch, Vector3(0.0, 1.16, 0.0), Color("765538"), Vector3.ONE, 1)
+			winch_node.rotation.z = PI * 0.5
+			var rope := CylinderMesh.new()
+			rope.top_radius = 0.025
+			rope.bottom_radius = 0.025
+			rope.height = 0.54
+			rope.radial_segments = 5
+			_add_object_mesh(root, rope, Vector3(0.0, 0.82, 0.0), Color("b49b70"), Vector3.ONE, 1)
+			var crank := BoxMesh.new()
+			crank.size = Vector3(0.10, 0.42, 0.10)
+			_add_object_mesh(root, crank, Vector3(0.57, 1.18, 0.0), Color("765538"), Vector3.ONE, 1)
 		"camp":
 			var tent := PrismMesh.new()
 			tent.size = Vector3(1.15, 0.95, 1.42)
@@ -1671,15 +1716,46 @@ func _create_placeable_node(kind: String) -> Node3D:
 			camp_log.radial_segments = 6
 			var log_a := _add_object_mesh(root, camp_log, Vector3(0.45, 0.10, 0.22), Color("694c31"))
 			log_a.rotation.z = PI * 0.5
-			var log_b := _add_object_mesh(root, camp_log, Vector3(0.45, 0.10, -0.22), Color("765438"))
+			var log_b := _add_object_mesh(root, camp_log, Vector3(0.45, 0.10, -0.22), Color("765438"), Vector3.ONE, 1)
 			log_b.rotation.z = PI * 0.5
+			var ridge_pole := CylinderMesh.new()
+			ridge_pole.top_radius = 0.035
+			ridge_pole.bottom_radius = 0.045
+			ridge_pole.height = 1.50
+			ridge_pole.radial_segments = 5
+			var pole_node := _add_object_mesh(root, ridge_pole, Vector3(-0.32, 0.76, 0.0), Color("79583a"), Vector3.ONE, 1)
+			pole_node.rotation.z = PI * 0.5
+			for rope_side in [-1.0, 1.0]:
+				var guy_rope := CylinderMesh.new()
+				guy_rope.top_radius = 0.012
+				guy_rope.bottom_radius = 0.012
+				guy_rope.height = 0.62
+				guy_rope.radial_segments = 4
+				var rope_node := _add_object_mesh(root, guy_rope, Vector3(-0.32 + rope_side * 0.48, 0.28, 0.60), Color("b39a6b"), Vector3.ONE, 1)
+				rope_node.rotation.z = rope_side * -0.90
 		"boulder":
 			var rock := SphereMesh.new()
 			rock.radius = 0.48
 			rock.height = 0.78
-			rock.radial_segments = 5
-			rock.rings = 3
-			_add_object_mesh(root, rock, Vector3(0.0, 0.30, 0.0), Color("77776d"), Vector3(1.25, 0.78, 0.92))
+			rock.radial_segments = 7
+			rock.rings = 4
+			var main_boulder := _add_object_mesh(root, rock, Vector3(0.0, 0.30, 0.0), Color("77776d"), Vector3(1.25, 0.78, 0.92))
+			main_boulder.rotation.y = 0.28
+			for shard_index in range(3):
+				var shard := SphereMesh.new()
+				shard.radius = 0.20 + float(shard_index % 2) * 0.055
+				shard.height = 0.26
+				shard.radial_segments = 6
+				shard.rings = 3
+				var angle := TAU * float(shard_index) / 3.0 + 0.5
+				var shard_node := _add_object_mesh(root, shard, Vector3(cos(angle) * 0.51, 0.10, sin(angle) * 0.38), Color("898a80"))
+				shard_node.rotation.y = angle
+			var lichen := SphereMesh.new()
+			lichen.radius = 0.12
+			lichen.height = 0.055
+			lichen.radial_segments = 6
+			lichen.rings = 2
+			_add_object_mesh(root, lichen, Vector3(-0.22, 0.44, 0.35), Color("71805a"), Vector3(1.0, 0.30, 0.56))
 		"marker":
 			var pin := CylinderMesh.new()
 			pin.top_radius = 0.0
