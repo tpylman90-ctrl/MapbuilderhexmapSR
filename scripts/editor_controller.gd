@@ -986,6 +986,63 @@ func _create_placeable_node(kind: String) -> Node3D:
 			return null
 	return root
 
+func _castle_ring_points(radius_x: float, radius_z: float, offset: Vector2, phase: float) -> Array[Vector2]:
+	var points: Array[Vector2] = []
+	var irregularity: Array[float] = [1.0, 0.94, 1.06, 0.97, 1.03, 0.91, 1.05, 0.96, 1.04, 0.93, 1.07, 0.98]
+	for point_index in range(12):
+		var angle := TAU * float(point_index) / 12.0 + phase
+		var factor: float = irregularity[point_index]
+		points.append(offset + Vector2(cos(angle) * radius_x * factor, sin(angle) * radius_z * factor))
+	return points
+
+func _add_castle_wall_ring(root: Node3D, points: Array[Vector2], center_y: float, wall_height: float, thickness: float, has_gate: bool, color: Color) -> void:
+	for point_index in range(points.size()):
+		var a := points[point_index]
+		var b := points[(point_index + 1) % points.size()]
+		var midpoint := (a + b) * 0.5
+		if has_gate and midpoint.y > 0.78 * maxf(absf(a.y), absf(b.y)):
+			continue
+		var edge := b - a
+		var length := edge.length()
+		var yaw := atan2(-edge.y, edge.x)
+		var wall := BoxMesh.new()
+		wall.size = Vector3(length + 0.20, wall_height, thickness)
+		var segment_center := Vector3(midpoint.x, center_y, midpoint.y)
+		var wall_instance := _add_object_mesh(root, wall, segment_center, color)
+		wall_instance.rotation.y = yaw
+		var coping := BoxMesh.new()
+		coping.size = Vector3(length + 0.26, 0.20, thickness + 0.16)
+		var coping_instance := _add_object_mesh(root, coping, Vector3(midpoint.x, center_y + wall_height * 0.5 + 0.08, midpoint.y), color.lightened(0.12))
+		coping_instance.rotation.y = yaw
+		var merlons := maxi(1, roundi(length / 0.72))
+		for merlon_index in range(merlons):
+			var along := (float(merlon_index) + 0.5) / float(merlons) - 0.5
+			var merlon := BoxMesh.new()
+			merlon.size = Vector3(0.34, 0.34, thickness + 0.10)
+			var position := Vector3(midpoint.x + edge.x * along, center_y + wall_height * 0.5 + 0.31, midpoint.y + edge.y * along)
+			var merlon_instance := _add_object_mesh(root, merlon, position, color.lightened(0.20))
+			merlon_instance.rotation.y = yaw
+
+func _add_castle_tower(root: Node3D, point: Vector2, height: float, radius: float, color: Color) -> void:
+	var shaft := CylinderMesh.new()
+	shaft.top_radius = radius * 0.88
+	shaft.bottom_radius = radius
+	shaft.height = height
+	shaft.radial_segments = 10
+	_add_object_mesh(root, shaft, Vector3(point.x, height * 0.5, point.y), color)
+	var battlement := CylinderMesh.new()
+	battlement.top_radius = radius * 1.18
+	battlement.bottom_radius = radius * 1.18
+	battlement.height = 0.20
+	battlement.radial_segments = 10
+	_add_object_mesh(root, battlement, Vector3(point.x, height + 0.08, point.y), color.lightened(0.15))
+	var roof := CylinderMesh.new()
+	roof.top_radius = 0.0
+	roof.bottom_radius = radius * 1.22
+	roof.height = radius * 1.55
+	roof.radial_segments = 8
+	_add_object_mesh(root, roof, Vector3(point.x, height + radius * 0.92, point.y), Color("58443b"))
+
 func _add_object_mesh(parent: Node3D, mesh: Mesh, local_position: Vector3, color: Color, local_scale: Vector3 = Vector3.ONE) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.mesh = mesh
