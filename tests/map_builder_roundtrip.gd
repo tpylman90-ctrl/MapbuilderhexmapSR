@@ -137,6 +137,50 @@ func _run() -> void:
 		_fail("Undo did not restore the blank terrain before generation")
 		return
 
+	editor.set("_generation_preset", "ashenreach")
+	editor.call("_generate_map")
+	var ash_count := 0
+	var lava_count := 0
+	var basalt_count := 0
+	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
+		var sample_cell := grid.cell_from_index(index)
+		match grid.terrain_at(sample_cell):
+			HexGrid.Terrain.ASH:
+				ash_count += 1
+			HexGrid.Terrain.LAVA:
+				lava_count += 1
+			HexGrid.Terrain.STONE:
+				basalt_count += 1
+	if ash_count == 0 or lava_count == 0 or basalt_count == 0:
+		_fail("Ashenreach did not create ash flats, lava, and basalt terrain")
+		return
+	var ashen_objects: Array = editor.get("_placed_objects")
+	var object_types: Dictionary = {}
+	for ashen_object in ashen_objects:
+		if is_instance_valid(ashen_object) and ashen_object.visible:
+			object_types[str(ashen_object.get_meta("map_object_type", ""))] = true
+	if not object_types.has("ashen_keep") or not object_types.has("ash_tree") or not object_types.has("lava_vent"):
+		_fail("Ashenreach is missing its Citadel, charred trees, or lava vents")
+		return
+	editor.call("_save_map_file", TEST_PATH)
+	editor.call("_undo")
+	if grid.terrain_at(Vector2i(41, 27)) == HexGrid.Terrain.LAVA:
+		_fail("Undo did not restore terrain before Ashenreach generation")
+		return
+	editor.call("_new_blank_map")
+	editor.call("_load_map_file", TEST_PATH)
+	await process_frame
+	if grid.terrain_at(Vector2i(41, 27)) != HexGrid.Terrain.LAVA:
+		_fail("Ashenreach map round-trip did not preserve lava terrain")
+		return
+	var loaded_types: Dictionary = {}
+	for loaded_object in editor.get("_placed_objects"):
+		if is_instance_valid(loaded_object) and loaded_object.visible:
+			loaded_types[str(loaded_object.get_meta("map_object_type", ""))] = true
+	if not loaded_types.has("ashen_keep") or not loaded_types.has("lava_vent"):
+		_fail("Ashenreach map round-trip did not restore volcanic objects")
+		return
+
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_PATH))
 	print("Map builder round-trip, object history, named markers, and island generation passed.")
 	quit(0)
