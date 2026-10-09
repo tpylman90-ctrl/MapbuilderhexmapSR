@@ -923,7 +923,6 @@ func _create_placeable_node(kind: String) -> Node3D:
 				hoop.inner_radius = 0.172
 				hoop.outer_radius = 0.192
 				var hoop_node := _add_object_mesh(root, hoop, Vector3(-1.05, hoop_y, 0.76), Color("686b68"), Vector3.ONE, 4)
-				hoop_node.rotation.x = PI * 0.5
 			var barrel_lid := CylinderMesh.new()
 			barrel_lid.top_radius = 0.15
 			barrel_lid.bottom_radius = 0.15
@@ -996,7 +995,7 @@ func _create_placeable_node(kind: String) -> Node3D:
 				blade_node.rotation.z = blade_angle
 				var sail_panel := BoxMesh.new()
 				sail_panel.size = Vector3(0.34, 0.52, 0.035)
-				var sail_node := _add_object_mesh(root, sail_panel, Vector3(0.0, 2.38, 0.62), Color("e1d3b3"), Vector3.ONE, 3)
+				var sail_node := _add_object_mesh(root, sail_panel, Vector3(-sin(blade_angle) * 0.44, 1.92 + cos(blade_angle) * 0.44, 0.62), Color("e1d3b3"), Vector3.ONE, 3)
 				sail_node.rotation.z = blade_angle
 			var mill_door := BoxMesh.new()
 			mill_door.size = Vector3(0.32, 0.62, 0.08)
