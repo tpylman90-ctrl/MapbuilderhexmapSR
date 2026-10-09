@@ -36,6 +36,19 @@ func _run() -> void:
 	if object == null:
 		_fail("Could not place the procedural pine stamp")
 		return
+	if object.get_child_count() < 10:
+		_fail("Pine stamp is missing its layered branch and canopy geometry")
+		return
+	var pine_foliage := object.get_child(1) as MeshInstance3D
+	var pine_material := pine_foliage.material_override as ShaderMaterial if pine_foliage != null else null
+	if pine_material == null or pine_material.get_shader_parameter("surface_style") != 2:
+		_fail("Placeable foliage did not receive its procedural leaf surface")
+		return
+	var detailed_cottage := editor.call("_create_placeable_node", "cottage") as Node3D
+	if detailed_cottage == null or detailed_cottage.get_child_count() < 30:
+		_fail("Cottage close-up geometry is missing its construction details")
+		return
+	detailed_cottage.free()
 	var marker_cell := Vector2i(22, 40)
 	var marker := editor.call("_place_active_object", marker_cell, false, "marker", 0.0, 1.0, "Crossroads") as Node3D
 	if marker == null or str(marker.get_meta("map_object_label", "")) != "Crossroads":
