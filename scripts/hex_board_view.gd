@@ -647,6 +647,7 @@ func _rebuild_cliffs() -> void:
 	if face_count == 0:
 		cliff_shader_material = null
 		return
+	surface.index()
 	surface.generate_normals()
 	cliff_node = MeshInstance3D.new()
 	cliff_node.name = "RockyElevationCliffs"
@@ -659,19 +660,20 @@ func _rebuild_cliffs() -> void:
 	add_child(cliff_node)
 
 func _add_cliff_wall(surface: SurfaceTool, top_a: Vector3, top_b: Vector3, bottom_a: Vector3, bottom_b: Vector3) -> void:
-	const VERTICAL_STEPS := 5
-	const EDGE_STEPS := 3
+	const VERTICAL_STEPS := 7
+	const EDGE_STEPS := 10
+	var edge_tangent := (top_b - top_a).normalized()
+	var wall_normal := Vector3.UP.cross(edge_tangent).normalized()
 	for vertical_step in range(VERTICAL_STEPS):
 		var t0 := float(vertical_step) / VERTICAL_STEPS
 		var t1 := float(vertical_step + 1) / VERTICAL_STEPS
 		for edge_step in range(EDGE_STEPS):
 			var s0 := float(edge_step) / EDGE_STEPS
 			var s1 := float(edge_step + 1) / EDGE_STEPS
-			var a0 := _cliff_vertex(top_a.lerp(top_b, s0), bottom_a.lerp(bottom_b, s0), t0)
-			var b0 := _cliff_vertex(top_a.lerp(top_b, s1), bottom_a.lerp(bottom_b, s1), t0)
-			var a1 := _cliff_vertex(top_a.lerp(top_b, s0), bottom_a.lerp(bottom_b, s0), t1)
-			var b1 := _cliff_vertex(top_a.lerp(top_b, s1), bottom_a.lerp(bottom_b, s1), t1)
-			# Alternate the split to create broad, chiseled low-poly facets.
+			var a0 := _cliff_vertex(top_a, top_b, bottom_a, bottom_b, s0, t0, wall_normal)
+			var b0 := _cliff_vertex(top_a, top_b, bottom_a, bottom_b, s1, t0, wall_normal)
+			var a1 := _cliff_vertex(top_a, top_b, bottom_a, bottom_b, s0, t1, wall_normal)
+			var b1 := _cliff_vertex(top_a, top_b, bottom_a, bottom_b, s1, t1, wall_normal)
 			if (edge_step + vertical_step) % 2 == 0:
 				_add_triangle(surface, a0, b0, a1, Color.WHITE)
 				_add_triangle(surface, b0, b1, a1, Color.WHITE)
@@ -679,14 +681,20 @@ func _add_cliff_wall(surface: SurfaceTool, top_a: Vector3, top_b: Vector3, botto
 				_add_triangle(surface, a0, b0, b1, Color.WHITE)
 				_add_triangle(surface, a0, b1, a1, Color.WHITE)
 
-func _cliff_vertex(top: Vector3, bottom: Vector3, vertical_ratio: float) -> Vector3:
+func _cliff_vertex(top_a: Vector3, top_b: Vector3, bottom_a: Vector3, bottom_b: Vector3, edge_ratio: float, vertical_ratio: float, wall_normal: Vector3) -> Vector3:
+	var top := top_a.lerp(top_b, edge_ratio)
+	top.y = _surface_height_at(top.x, top.z)
+	var bottom := bottom_a.lerp(bottom_b, edge_ratio)
 	var point := top.lerp(bottom, vertical_ratio)
-	# Pin the seam at the cap and ground; let the middle face break into rock.
-	if vertical_ratio > 0.001 and vertical_ratio < 0.999:
-		var noise_value := cliff_noise.get_noise_3d(point.x * 1.15, point.y * 0.72, point.z * 1.15)
-		var edge_direction := Vector3(point.x, 0.0, point.z).normalized()
-		point += edge_direction * noise_value * cliff_detail_strength * 0.24
-		point.y += cliff_noise.get_noise_3d(point.x * 2.7 + 17.0, point.y * 0.85, point.z * 2.7 - 11.0) * 0.075 * cliff_detail_strength
+	# Dense curved sections break the hex outline into a continuous rock run.
+	# The middle swells and the cap and toe remain joined to the ground surface.
+	var edge_envelope := sin(edge_ratio * PI)
+	var vertical_envelope := sin(vertical_ratio * PI)
+	var broad_noise := cliff_noise.get_noise_3d(point.x * 0.36, point.y * 0.28, point.z * 0.36)
+	var detail_noise := cliff_noise.get_noise_3d(point.x * 1.8 + 21.0, point.y * 0.8, point.z * 1.8 - 14.0)
+	var ledge := sin(vertical_ratio * PI * 2.6 + broad_noise * 1.5) * 0.12
+	point += wall_normal * edge_envelope * vertical_envelope * (broad_noise * 0.48 + detail_noise * 0.12 + ledge) * cliff_detail_strength
+	point.y += vertical_envelope * detail_noise * 0.13 * cliff_detail_strength
 	return point
 
 func set_surface_detail(value: float) -> void:
