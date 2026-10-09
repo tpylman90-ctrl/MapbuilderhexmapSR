@@ -1730,48 +1730,48 @@ func _add_building_shell(root: Node3D, footprint: Vector3, wall_height: float, w
 	_add_object_mesh(root, walls, Vector3(0.0, 0.16 + wall_height * 0.5, 0.0), wall_color)
 	var roof := PrismMesh.new()
 	roof.size = Vector3(footprint.x + 0.28, maxf(0.64, footprint.y * 1.22), footprint.z + 0.32)
-	_add_object_mesh(root, roof, Vector3(0.0, wall_height + 0.22, 0.0), roof_color)
+	_add_object_mesh(root, roof, Vector3(0.0, wall_height + 0.22, 0.0), roof_color, Vector3.ONE, 3)
 	# Eaves, ridge cap and exposed rafter ends give the roof a built, layered silhouette.
 	var ridge := CylinderMesh.new()
 	ridge.top_radius = 0.075
 	ridge.bottom_radius = 0.075
 	ridge.height = footprint.x + 0.34
 	ridge.radial_segments = 7
-	var ridge_instance := _add_object_mesh(root, ridge, Vector3(0.0, wall_height + 0.58, 0.0), roof_color.lightened(0.16))
+	var ridge_instance := _add_object_mesh(root, ridge, Vector3(0.0, wall_height + 0.58, 0.0), roof_color.lightened(0.16), Vector3.ONE, 3)
 	ridge_instance.rotation.z = PI * 0.5
 	for side in [-1.0, 1.0]:
 		var eave := BoxMesh.new()
 		eave.size = Vector3(footprint.x + 0.38, 0.10, 0.13)
-		_add_object_mesh(root, eave, Vector3(0.0, wall_height + 0.12, side * (footprint.z * 0.5 + 0.12)), roof_color.darkened(0.12))
+		_add_object_mesh(root, eave, Vector3(0.0, wall_height + 0.12, side * (footprint.z * 0.5 + 0.12)), roof_color.darkened(0.12), Vector3.ONE, 3)
 		for rafter_index in range(3):
 			var rafter := BoxMesh.new()
 			rafter.size = Vector3(0.09, 0.30, 0.10)
-			var rafter_node := _add_object_mesh(root, rafter, Vector3(-footprint.x * 0.34 + float(rafter_index) * footprint.x * 0.34, wall_height + 0.08, side * (footprint.z * 0.5 + 0.14)), wall_color.darkened(0.18))
+			var rafter_node := _add_object_mesh(root, rafter, Vector3(-footprint.x * 0.34 + float(rafter_index) * footprint.x * 0.34, wall_height + 0.08, side * (footprint.z * 0.5 + 0.14)), wall_color.darkened(0.18), Vector3.ONE, 1)
 			rafter_node.rotation.x = side * -0.24
 	# A restrained timber frame breaks up broad wall surfaces and makes close views read as construction.
 	for x_side in [-1.0, 1.0]:
 		var corner_post := BoxMesh.new()
 		corner_post.size = Vector3(0.105, wall_height, 0.11)
-		_add_object_mesh(root, corner_post, Vector3(x_side * (footprint.x * 0.5 - 0.07), 0.16 + wall_height * 0.5, footprint.z * 0.5 + 0.018), wall_color.darkened(0.20))
+		_add_object_mesh(root, corner_post, Vector3(x_side * (footprint.x * 0.5 - 0.07), 0.16 + wall_height * 0.5, footprint.z * 0.5 + 0.018), wall_color.darkened(0.20), Vector3.ONE, 1)
 	var facade_beam := BoxMesh.new()
 	facade_beam.size = Vector3(footprint.x, 0.10, 0.10)
-	_add_object_mesh(root, facade_beam, Vector3(0.0, 0.16 + wall_height * 0.28, footprint.z * 0.5 + 0.02), wall_color.darkened(0.14))
+	_add_object_mesh(root, facade_beam, Vector3(0.0, 0.16 + wall_height * 0.28, footprint.z * 0.5 + 0.02), wall_color.darkened(0.14), Vector3.ONE, 1)
 	var door := BoxMesh.new()
 	door.size = Vector3(0.30, wall_height * 0.73, 0.07)
-	_add_object_mesh(root, door, Vector3(0.0, 0.16 + door.size.y * 0.5, footprint.z * 0.5 + 0.045), door_color)
+	_add_object_mesh(root, door, Vector3(0.0, 0.16 + door.size.y * 0.5, footprint.z * 0.5 + 0.045), door_color, Vector3.ONE, 1)
 	for plank_index in [-1.0, 1.0]:
 		var plank := BoxMesh.new()
 		plank.size = Vector3(0.018, door.size.y * 0.88, 0.018)
-		_add_object_mesh(root, plank, Vector3(plank_index * 0.075, 0.16 + door.size.y * 0.5, footprint.z * 0.5 + 0.087), door_color.lightened(0.12))
+		_add_object_mesh(root, plank, Vector3(plank_index * 0.075, 0.16 + door.size.y * 0.5, footprint.z * 0.5 + 0.087), door_color.lightened(0.12), Vector3.ONE, 1)
 	var handle := SphereMesh.new()
 	handle.radius = 0.035
 	handle.height = 0.07
 	handle.radial_segments = 6
 	handle.rings = 3
-	_add_object_mesh(root, handle, Vector3(0.09, 0.16 + door.size.y * 0.52, footprint.z * 0.5 + 0.10), Color("b89a58"))
+	_add_object_mesh(root, handle, Vector3(0.09, 0.16 + door.size.y * 0.52, footprint.z * 0.5 + 0.10), Color("b89a58"), Vector3.ONE, 4)
 	var doorstep := BoxMesh.new()
 	doorstep.size = Vector3(0.48, 0.09, 0.20)
-	_add_object_mesh(root, doorstep, Vector3(0.0, 0.05, footprint.z * 0.5 + 0.13), wall_color.lightened(0.10))
+	_add_object_mesh(root, doorstep, Vector3(0.0, 0.05, footprint.z * 0.5 + 0.13), wall_color.lightened(0.10), Vector3.ONE, 0)
 	var window_y := 0.16 + wall_height * 0.64
 	var window_z := footprint.z * 0.5 + 0.045
 	_add_building_window(root, Vector3(-footprint.x * 0.28, window_y, window_z), 0.19)
@@ -1783,23 +1783,23 @@ func _add_building_shell(root: Node3D, footprint: Vector3, wall_height: float, w
 func _add_building_window(root: Node3D, position: Vector3, width: float) -> void:
 	var frame := BoxMesh.new()
 	frame.size = Vector3(width + 0.12, 0.34, 0.07)
-	_add_object_mesh(root, frame, position, Color("594536"))
+	_add_object_mesh(root, frame, position, Color("594536"), Vector3.ONE, 1)
 	var pane := BoxMesh.new()
 	pane.size = Vector3(width, 0.24, 0.035)
-	_add_object_mesh(root, pane, position + Vector3(0.0, 0.0, 0.045), Color("657c80"))
+	_add_object_mesh(root, pane, position + Vector3(0.0, 0.0, 0.045), Color("657c80"), Vector3.ONE, 4)
 	var mullion := BoxMesh.new()
 	mullion.size = Vector3(0.035, 0.24, 0.04)
-	_add_object_mesh(root, mullion, position + Vector3(0.0, 0.0, 0.068), Color("594536"))
+	_add_object_mesh(root, mullion, position + Vector3(0.0, 0.0, 0.068), Color("594536"), Vector3.ONE, 1)
 	var crossbar := BoxMesh.new()
 	crossbar.size = Vector3(width, 0.035, 0.04)
-	_add_object_mesh(root, crossbar, position + Vector3(0.0, 0.0, 0.068), Color("594536"))
+	_add_object_mesh(root, crossbar, position + Vector3(0.0, 0.0, 0.068), Color("594536"), Vector3.ONE, 1)
 	var sill := BoxMesh.new()
 	sill.size = Vector3(width + 0.18, 0.07, 0.13)
-	_add_object_mesh(root, sill, position + Vector3(0.0, -0.20, 0.035), Color("756047"))
+	_add_object_mesh(root, sill, position + Vector3(0.0, -0.20, 0.035), Color("756047"), Vector3.ONE, 1)
 	for side in [-1.0, 1.0]:
 		var shutter := BoxMesh.new()
 		shutter.size = Vector3(0.09, 0.28, 0.055)
-		_add_object_mesh(root, shutter, position + Vector3(side * (width * 0.5 + 0.07), 0.0, 0.045), Color("594536"))
+		_add_object_mesh(root, shutter, position + Vector3(side * (width * 0.5 + 0.07), 0.0, 0.045), Color("594536"), Vector3.ONE, 1)
 
 func _add_building_chimney(root: Node3D, position: Vector3) -> void:
 	var chimney := CylinderMesh.new()
@@ -1874,7 +1874,7 @@ func _add_castle_tower(root: Node3D, point: Vector2, height: float, radius: floa
 		slit.size = Vector3(0.12, 0.48, 0.07)
 		var slit_instance := _add_object_mesh(root, slit, Vector3(point.x + cos(slit_angle) * radius * 0.96, height * 0.60, point.y + sin(slit_angle) * radius * 0.96), Color("292b2a"))
 		slit_instance.rotation.y = slit_angle + PI * 0.5
-func _add_object_mesh(parent: Node3D, mesh: Mesh, local_position: Vector3, color: Color, local_scale: Vector3 = Vector3.ONE) -> MeshInstance3D:
+func _add_object_mesh(parent: Node3D, mesh: Mesh, local_position: Vector3, color: Color, local_scale: Vector3 = Vector3.ONE, surface_style: int = -1) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.mesh = mesh
 	instance.position = local_position
@@ -1889,7 +1889,7 @@ func _add_object_mesh(parent: Node3D, mesh: Mesh, local_position: Vector3, color
 		var prop_material := ShaderMaterial.new()
 		prop_material.shader = load("res://assets/materials/prop_surface.gdshader") as Shader
 		prop_material.set_shader_parameter("base_color", color)
-		prop_material.set_shader_parameter("surface_style", _prop_surface_style(color))
+		prop_material.set_shader_parameter("surface_style", surface_style if surface_style >= 0 else _prop_surface_style(color))
 		prop_material.set_shader_parameter("detail_strength", 0.82)
 		instance.material_override = prop_material
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
