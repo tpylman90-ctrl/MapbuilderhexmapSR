@@ -616,11 +616,78 @@ func _make_selection_outline_mesh(cell: Vector2i) -> ArrayMesh:
 	return surface.commit()
 
 func _rebuild_cliffs() -> void:
-	# Rock faces come from the square heightfield's slope shading.
 	if cliff_node != null:
 		cliff_node.queue_free()
 		cliff_node = null
-	cliff_shader_material = null
+	if data == null:
+		return
+
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var face_count := 0
+	for row in range(HexGrid.ROWS):
+		for column in range(HexGrid.COLUMNS):
+			var cell := Vector2i(column, row)
+			var high_level := data.elevation_at(cell)
+			for edge in range(6):
+				var neighbor := data.neighbor_for_edge(cell, edge)
+				var low_level := data.elevation_at(neighbor) if data.contains(neighbor) else 0
+				# Only expose true escarpments. One-step terrain transitions stay soft.
+				if high_level - low_level < 2:
+					continue
+				var center := data.world_center(cell)
+				var angle_a := deg_to_rad(30.0 + 60.0 * edge)
+				var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
+				var top_a := Vector3(center.x + cos(angle_a) * EDGE_RADIUS, float(high_level) * STEP_HEIGHT + CAP_HEIGHT * 0.5, center.z + sin(angle_a) * EDGE_RADIUS)
+				var top_b := Vector3(center.x + cos(angle_b) * EDGE_RADIUS, float(high_level) * STEP_HEIGHT + CAP_HEIGHT * 0.5, center.z + sin(angle_b) * EDGE_RADIUS)
+				var bottom_a := Vector3(top_a.x, float(low_level) * STEP_HEIGHT + CAP_HEIGHT * 0.5, top_a.z)
+				var bottom_b := Vector3(top_b.x, float(low_level) * STEP_HEIGHT + CAP_HEIGHT * 0.5, top_b.z)
+				_add_cliff_wall(surface, top_a, top_b, bottom_a, bottom_b)
+				face_count += 1
+	if face_count == 0:
+		cliff_shader_material = null
+		return
+	surface.generate_normals()
+	cliff_node = MeshInstance3D.new()
+	cliff_node.name = "RockyElevationCliffs"
+	cliff_node.mesh = surface.commit()
+	cliff_shader_material = ShaderMaterial.new()
+	cliff_shader_material.shader = load("res://assets/materials/cliff_rock_texture.gdshader") as Shader
+	cliff_shader_material.set_shader_parameter("rock_detail", cliff_detail_strength)
+	cliff_node.material_override = cliff_shader_material
+	cliff_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	add_child(cliff_node)
+
+func _add_cliff_wall(surface: SurfaceTool, top_a: Vector3, top_b: Vector3, bottom_a: Vector3, bottom_b: Vector3) -> void:
+	const VERTICAL_STEPS := 5
+	const EDGE_STEPS := 3
+	for vertical_step in range(VERTICAL_STEPS):
+		var t0 := float(vertical_step) / VERTICAL_STEPS
+		var t1 := float(vertical_step + 1) / VERTICAL_STEPS
+		for edge_step in range(EDGE_STEPS):
+			var s0 := float(edge_step) / EDGE_STEPS
+			var s1 := float(edge_step + 1) / EDGE_STEPS
+			var a0 := _cliff_vertex(top_a.lerp(top_b, s0), bottom_a.lerp(bottom_b, s0), t0)
+			var b0 := _cliff_vertex(top_a.lerp(top_b, s1), bottom_a.lerp(bottom_b, s1), t0)
+			var a1 := _cliff_vertex(top_a.lerp(top_b, s0), bottom_a.lerp(bottom_b, s0), t1)
+			var b1 := _cliff_vertex(top_a.lerp(top_b, s1), bottom_a.lerp(bottom_b, s1), t1)
+			# Alternate the split to create broad, chiseled low-poly facets.
+			if (edge_step + vertical_step) % 2 == 0:
+				_add_triangle(surface, a0, b0, a1, Color.WHITE)
+				_add_triangle(surface, b0, b1, a1, Color.WHITE)
+			else:
+				_add_triangle(surface, a0, b0, b1, Color.WHITE)
+				_add_triangle(surface, a0, b1, a1, Color.WHITE)
+
+func _cliff_vertex(top: Vector3, bottom: Vector3, vertical_ratio: float) -> Vector3:
+	var point := top.lerp(bottom, vertical_ratio)
+	# Pin the seam at the cap and ground; let the middle face break into rock.
+	if vertical_ratio > 0.001 and vertical_ratio < 0.999:
+		var noise_value := cliff_noise.get_noise_3d(point.x * 1.15, point.y * 0.72, point.z * 1.15)
+		var edge_direction := Vector3(point.x, 0.0, point.z).normalized()
+		point += edge_direction * noise_value * cliff_detail_strength * 0.24
+		point.y += cliff_noise.get_noise_3d(point.x * 2.7 + 17.0, point.y * 0.85, point.z * 2.7 - 11.0) * 0.075 * cliff_detail_strength
+	return point
 
 func set_surface_detail(value: float) -> void:
 	surface_detail_strength = clampf(value, 0.0, 1.0)
@@ -629,6 +696,8 @@ func set_surface_detail(value: float) -> void:
 
 func set_cliff_detail(value: float) -> void:
 	cliff_detail_strength = clampf(value, 0.0, 1.0)
+	if cliff_shader_material != null:
+		cliff_shader_material.set_shader_parameter("rock_detail", cliff_detail_strength)
 
 func refresh_cliffs() -> void:
 	_rebuild_cliffs()

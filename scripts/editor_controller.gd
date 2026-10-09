@@ -208,6 +208,8 @@ func _build_editor_ui() -> void:
 	_add_object_button(object_grid, "Cottage", "cottage")
 	_add_object_button(object_grid, "Stone Keep", "castle")
 	_add_object_button(object_grid, "Bridge", "bridge")
+	_add_object_button(object_grid, "Stone Wall", "wall")
+	_add_object_button(object_grid, "Wood Fence", "fence")
 	_add_object_button(object_grid, "Oak Tree", "oak")
 	_add_object_button(object_grid, "Pine", "pine")
 	_add_object_button(object_grid, "Boulder", "boulder")
@@ -606,6 +608,8 @@ func _object_label(object_kind: String) -> String:
 		"cottage": return "Village Cottage"
 		"castle": return "Stone Keep"
 		"bridge": return "Stone Bridge"
+		"wall": return "Stone Wall"
+		"fence": return "Wood Fence"
 		"oak": return "Oak Tree"
 		"pine": return "Pine"
 		"boulder": return "Boulder"
@@ -735,12 +739,17 @@ func _place_active_object(cell: Vector2i, record_history: bool = true, object_ki
 	if kind == "house":
 		node.scale = Vector3.ONE * HOUSE_MODEL_SCALE * scale_factor
 		surface_y -= HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE * scale_factor
+	elif kind == "castle":
+		# One movement cell is approximately 20 feet across; the keep occupies a
+		# substantial 8-cell footprint instead of reading like a tiny token.
+		node.scale = Vector3(2.35, 1.35, 2.35) * scale_factor
 	else:
 		node.scale = Vector3.ONE * scale_factor
 	node.position = Vector3(center.x, surface_y, center.z)
 	node.rotation.y = deg_to_rad(rotation)
 	node.set_meta("map_object_type", kind)
 	node.set_meta("map_cell", cell)
+	node.set_meta("map_footprint_cells", _object_footprint_cells(kind, cell))
 	node.set_meta("map_object_scale", scale_factor)
 	node.set_meta("map_object_rotation", rotation)
 	if kind == "marker":
@@ -846,25 +855,45 @@ func _create_placeable_node(kind: String) -> Node3D:
 				var offset := -1.95 + float(crenel) * 0.43
 				_add_object_mesh(root, side_merlon, Vector3(-2.55, 2.00, offset), Color("969184"))
 				_add_object_mesh(root, side_merlon, Vector3(2.55, 2.00, offset), Color("969184"))
+		"wall":
+			var wall_body := BoxMesh.new()
+			wall_body.size = Vector3(2.45, 1.15, 0.34)
+			_add_object_mesh(root, wall_body, Vector3(0.0, 0.62, 0.0), Color("77776d"))
+			var wall_cap := BoxMesh.new()
+			wall_cap.size = Vector3(2.58, 0.16, 0.43)
+			_add_object_mesh(root, wall_cap, Vector3(0.0, 1.27, 0.0), Color("989286"))
+			for merlon_index in range(5):
+				var merlon := BoxMesh.new()
+				merlon.size = Vector3(0.30, 0.30, 0.40)
+				_add_object_mesh(root, merlon, Vector3(-0.98 + float(merlon_index) * 0.49, 1.49, 0.0), Color("a19b8f"))
+		"fence":
+			var rail := BoxMesh.new()
+			rail.size = Vector3(2.10, 0.12, 0.10)
+			_add_object_mesh(root, rail, Vector3(0.0, 0.48, 0.0), Color("765237"))
+			_add_object_mesh(root, rail, Vector3(0.0, 0.88, 0.0), Color("8b6540"))
+			var fence_post := BoxMesh.new()
+			fence_post.size = Vector3(0.16, 1.05, 0.16)
+			for post_index in range(4):
+				_add_object_mesh(root, fence_post, Vector3(-1.0 + float(post_index) * 0.67, 0.54, 0.0), Color("63462f"))
 		"bridge":
 			var deck := BoxMesh.new()
-			deck.size = Vector3(4.8, 0.20, 1.30)
+			deck.size = Vector3(7.8, 0.24, 1.75)
 			_add_object_mesh(root, deck, Vector3(0.0, 0.34, 0.0), Color("72563a"))
 			var plank := BoxMesh.new()
 			plank.size = Vector3(0.13, 0.08, 1.34)
-			for plank_index in range(17):
-				var x_offset := -2.28 + float(plank_index) * 0.285
+			for plank_index in range(27):
+				var x_offset := -3.72 + float(plank_index) * 0.285
 				_add_object_mesh(root, plank, Vector3(x_offset, 0.48, 0.0), Color("92704a"))
 			var rail := BoxMesh.new()
-			rail.size = Vector3(4.8, 0.12, 0.10)
-			_add_object_mesh(root, rail, Vector3(0.0, 0.88, -0.68), Color("634b35"))
-			_add_object_mesh(root, rail, Vector3(0.0, 0.88, 0.68), Color("634b35"))
+			rail.size = Vector3(7.8, 0.14, 0.12)
+			_add_object_mesh(root, rail, Vector3(0.0, 0.96, -0.88), Color("634b35"))
+			_add_object_mesh(root, rail, Vector3(0.0, 0.96, 0.88), Color("634b35"))
 			var post := BoxMesh.new()
 			post.size = Vector3(0.14, 0.60, 0.14)
-			for post_index in range(9):
-				var x_offset := -2.25 + float(post_index) * 0.56
-				_add_object_mesh(root, post, Vector3(x_offset, 0.72, -0.68), Color("634b35"))
-				_add_object_mesh(root, post, Vector3(x_offset, 0.72, 0.68), Color("634b35"))
+			for post_index in range(13):
+				var x_offset := -3.72 + float(post_index) * 0.62
+				_add_object_mesh(root, post, Vector3(x_offset, 0.78, -0.88), Color("634b35"))
+				_add_object_mesh(root, post, Vector3(x_offset, 0.78, 0.88), Color("634b35"))
 		"oak":
 			var oak_trunk := CylinderMesh.new()
 			oak_trunk.top_radius = 0.07
@@ -944,12 +973,43 @@ func _add_object_mesh(parent: Node3D, mesh: Mesh, local_position: Vector3, color
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	parent.add_child(instance)
 
+func _object_footprint_radius(kind: String) -> int:
+	match kind:
+		"castle": return 4
+		"bridge": return 2
+		"wall", "fence": return 0
+		_: return 0
+
+func _object_footprint_cells(kind: String, anchor: Vector2i) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = [anchor]
+	var radius := _object_footprint_radius(kind)
+	if radius == 0:
+		return cells
+	var visited: Dictionary = {grid.index_of(anchor): true}
+	var frontier: Array[Vector2i] = [anchor]
+	for distance in range(radius):
+		var next_frontier: Array[Vector2i] = []
+		for current in frontier:
+			for edge in range(6):
+				var neighbor := grid.neighbor_for_edge(current, edge)
+				if not grid.contains(neighbor):
+					continue
+				var index := grid.index_of(neighbor)
+				if visited.has(index):
+					continue
+				visited[index] = true
+				cells.append(neighbor)
+				next_frontier.append(neighbor)
+		frontier = next_frontier
+	return cells
+
 func _erase_object_at(cell: Vector2i) -> void:
 	for object_index in range(_placed_objects.size() - 1, -1, -1):
 		var node := _placed_objects[object_index]
 		if not is_instance_valid(node) or not node.visible:
 			continue
-		if node.get_meta("map_cell", INVALID_CELL) == cell:
+		var footprint: Array = node.get_meta("map_footprint_cells", [node.get_meta("map_cell", INVALID_CELL)])
+		if footprint.has(cell):
 			node.visible = false
 			_commit_undo({"_object_action": "erase", "_object_node": node})
 			tool_status.text = "Erased %s" % _object_label(str(node.get_meta("map_object_type", "object")))
@@ -958,15 +1018,28 @@ func _erase_object_at(cell: Vector2i) -> void:
 	tool_status.text = "No object on hex %d, %d" % [cell.x, cell.y]
 
 func _refresh_objects_on_cell(cell: Vector2i) -> void:
-	var center := grid.world_center(cell)
-	var surface_y := board_view._surface_height_at(center.x, center.z)
 	for node in _placed_objects:
-		if not is_instance_valid(node) or not node.visible or node.get_meta("map_cell", INVALID_CELL) != cell:
+		if not is_instance_valid(node) or not node.visible:
 			continue
+		var anchor: Vector2i = node.get_meta("map_cell", INVALID_CELL)
+		var footprint: Array = node.get_meta("map_footprint_cells", [anchor])
+		if not footprint.has(cell):
+			continue
+		var total_height := 0.0
+		var samples := 0
+		for footprint_cell in footprint:
+			if not grid.contains(footprint_cell):
+				continue
+			var center := grid.world_center(footprint_cell)
+			total_height += board_view._surface_height_at(center.x, center.z)
+			samples += 1
+		if samples == 0:
+			continue
+		var surface_y := total_height / float(samples)
 		var kind := str(node.get_meta("map_object_type", ""))
 		if kind == "house":
 			var object_scale := float(node.get_meta("map_object_scale", 1.0))
-			surface_y = board_view._surface_height_at(center.x, center.z) - HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE * object_scale
+			surface_y -= HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE * object_scale
 		node.position.y = surface_y
 
 func _resnap_all_objects() -> void:
@@ -1328,6 +1401,26 @@ func _populate_kingdom_objects(seed_value: int) -> Array[Node3D]:
 	var spawned: Array[Node3D] = []
 	var occupied: Dictionary = {}
 	_spawn_kingdom_object("castle", Vector2i(20, 24), rng, occupied, spawned)
+	# A ring of modular wall segments establishes the town's fortified center.
+	var castle_center := Vector2i(20, 24)
+	for row in range(maxi(0, castle_center.y - 6), mini(HexGrid.ROWS, castle_center.y + 7)):
+		for column in range(maxi(0, castle_center.x - 6), mini(HexGrid.COLUMNS, castle_center.x + 7)):
+			var candidate := Vector2i(column, row)
+			if _kingdom_hex_distance(candidate, castle_center) == 6:
+				var outward := grid.world_center(candidate) - grid.world_center(castle_center)
+				var tangent_rotation := rad_to_deg(atan2(outward.z, outward.x)) + 90.0
+				_spawn_kingdom_object("wall", candidate, rng, occupied, spawned, tangent_rotation)
+	# Short fenced field plots make the agricultural district read at map scale.
+	for field_origin in [Vector2i(36, 80), Vector2i(45, 80), Vector2i(54, 80), Vector2i(36, 94), Vector2i(54, 94), Vector2i(36, 108), Vector2i(45, 108), Vector2i(54, 108)]:
+		for offset in range(5):
+			var top_cell := field_origin + Vector2i(offset, 0)
+			var bottom_cell := field_origin + Vector2i(offset, 6)
+			var left_cell := field_origin + Vector2i(0, offset)
+			var right_cell := field_origin + Vector2i(4, offset)
+			for fence_cell in [top_cell, bottom_cell, left_cell, right_cell]:
+				var outward_angle := atan2(float(fence_cell.y - field_origin.y - 3), float(fence_cell.x - field_origin.x - 2))
+				var fence_rotation := rad_to_deg(outward_angle) + 90.0
+				_spawn_kingdom_object("fence", fence_cell, rng, occupied, spawned, fence_rotation)
 	var bridge_row := 63
 	var bridge_column := clampi(roundi(_kingdom_river_x(float(bridge_row))), 0, HexGrid.COLUMNS - 1)
 	_spawn_kingdom_object("bridge", Vector2i(bridge_column, bridge_row), rng, occupied, spawned)
@@ -1344,18 +1437,21 @@ func _populate_kingdom_objects(seed_value: int) -> Array[Node3D]:
 			_spawn_kingdom_object("boulder", boulder_cell, rng, occupied, spawned)
 	return spawned
 
-func _spawn_kingdom_object(kind: String, cell: Vector2i, rng: RandomNumberGenerator, occupied: Dictionary, spawned: Array[Node3D]) -> void:
+func _spawn_kingdom_object(kind: String, cell: Vector2i, rng: RandomNumberGenerator, occupied: Dictionary, spawned: Array[Node3D], fixed_rotation: float = -1.0) -> void:
 	if not grid.contains(cell):
 		return
 	var index := grid.index_of(cell)
-	if occupied.has(index):
-		return
-	var rotation := rng.randf_range(0.0, 360.0) if kind in ["cottage", "house", "oak", "pine", "boulder"] else 0.0
+	var footprint := _object_footprint_cells(kind, cell)
+	for footprint_cell in footprint:
+		if occupied.has(grid.index_of(footprint_cell)):
+			return
+	var rotation := fixed_rotation if fixed_rotation >= 0.0 else (rng.randf_range(0.0, 360.0) if kind in ["cottage", "house", "oak", "pine", "boulder"] else 0.0)
 	var scale_factor := rng.randf_range(0.78, 1.12) if kind not in ["castle", "bridge"] else 1.0
 	var node := _place_active_object(cell, false, kind, rotation, scale_factor)
 	if node == null:
 		return
-	occupied[index] = true
+	for footprint_cell in footprint:
+		occupied[grid.index_of(footprint_cell)] = true
 	spawned.append(node)
 
 func _scatter_kingdom_houses(center: Vector2i, inner_radius: int, outer_radius: int, desired_count: int, rng: RandomNumberGenerator, occupied: Dictionary, spawned: Array[Node3D]) -> void:
@@ -1492,7 +1588,7 @@ func _load_map_file(path: String) -> void:
 			var record: Dictionary = record_variant
 			var cell := Vector2i(int(record.get("x", -1)), int(record.get("y", -1)))
 			var kind := str(record.get("type", ""))
-			if not grid.contains(cell) or not ["house", "cottage", "castle", "bridge", "oak", "pine", "boulder", "marker"].has(kind):
+			if not grid.contains(cell) or not ["house", "cottage", "castle", "bridge", "wall", "fence", "oak", "pine", "boulder", "marker"].has(kind):
 				continue
 			_place_active_object(
 				cell,
