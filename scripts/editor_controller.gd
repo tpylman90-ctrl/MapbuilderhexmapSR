@@ -197,24 +197,32 @@ func _build_editor_ui() -> void:
 	objects_page.name = "Objects"
 	objects_page.add_theme_constant_override("separation", 7)
 	tabs.add_child(objects_page)
-	_add_section_title(objects_page, "OBJECT STAMPS")
-	var object_grid := GridContainer.new()
-	object_grid.columns = 2
-	object_grid.add_theme_constant_override("h_separation", 6)
-	object_grid.add_theme_constant_override("v_separation", 6)
-	objects_page.add_child(object_grid)
+	var catalog_tabs := TabContainer.new()
+	catalog_tabs.name = "ObjectCatalog"
+	catalog_tabs.custom_minimum_size = Vector2(236.0, 286.0)
+	catalog_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	objects_page.add_child(catalog_tabs)
 	_object_buttons.clear()
-	_add_object_button(object_grid, "House", "house")
-	_add_object_button(object_grid, "Cottage", "cottage")
-	_add_object_button(object_grid, "Stone Keep", "castle")
-	_add_object_button(object_grid, "Bridge", "bridge")
-	_add_object_button(object_grid, "Stone Wall", "wall")
-	_add_object_button(object_grid, "Wood Fence", "fence")
-	_add_object_button(object_grid, "Oak Tree", "oak")
-	_add_object_button(object_grid, "Pine", "pine")
-	_add_object_button(object_grid, "Boulder", "boulder")
-	_add_object_button(object_grid, "Marker / Label", "marker")
-	_add_object_button(object_grid, "Erase Object", "erase")
+	_add_catalog_group(catalog_tabs, "Buildings", [
+		["Cottage · timber", "cottage"], ["Cottage · stone", "stone_house"],
+		["Farmhouse", "farmhouse"], ["Manor", "manor"], ["Tavern", "tavern"],
+		["Chapel", "chapel"], ["Watchtower", "watchtower"], ["Windmill", "windmill"],
+		["Village house", "house"]
+	])
+	_add_catalog_group(catalog_tabs, "Walls", [
+		["Grand keep", "castle"], ["Hill fort", "fortress"], ["Ruined fort", "castle_ruin"],
+		["Stone wall", "wall"], ["Low field wall", "stone_wall_low"],
+		["Timber palisade", "palisade"], ["Wood fence", "fence"],
+		["Wood bridge", "bridge"], ["Stone bridge", "stone_bridge"], ["Gatehouse", "gatehouse"]
+	])
+	_add_catalog_group(catalog_tabs, "Nature", [
+		["Broadleaf oak", "oak"], ["Tall pine", "pine"], ["Birch", "birch"],
+		["Fruit tree", "fruit_tree"], ["Boulder", "boulder"], ["Rock outcrop", "outcrop"],
+		["Hay stack", "haystack"]
+	])
+	_add_catalog_group(catalog_tabs, "Details", [
+		["Village well", "well"], ["Camp", "camp"], ["Map label", "marker"], ["Erase object", "erase"]
+	])
 	_add_section_title(objects_page, "MOVEMENT SCALE")
 	var scale_note := Label.new()
 	scale_note.text = "1 movement cell ≈ 20 ft • keep spans about 11 cells • bridge about 5"
@@ -411,6 +419,19 @@ func _add_object_button(parent: Control, button_text: String, object_kind: Strin
 			_set_object_tool(object_kind)
 	)
 	_object_buttons.append(button)
+
+func _add_catalog_group(parent: TabContainer, group_name: String, entries: Array) -> void:
+	var page := VBoxContainer.new()
+	page.name = group_name
+	page.add_theme_constant_override("separation", 6)
+	parent.add_child(page)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	page.add_child(grid)
+	for entry in entries:
+		_add_object_button(grid, str(entry[0]), str(entry[1]))
 
 func _make_map_file_dialog(mode_value: int) -> FileDialog:
 	var dialog := FileDialog.new()
@@ -610,15 +631,34 @@ func _scale_stamp(factor: float) -> void:
 
 func _object_label(object_kind: String) -> String:
 	match object_kind:
-		"house": return "Cartoon House"
-		"cottage": return "Village Cottage"
-		"castle": return "Stone Keep"
-		"bridge": return "Stone Bridge"
-		"wall": return "Stone Wall"
+		"house": return "Village House"
+		"cottage": return "Timber Cottage"
+		"stone_house": return "Stone Cottage"
+		"farmhouse": return "Farmhouse"
+		"manor": return "Manor House"
+		"tavern": return "Village Tavern"
+		"chapel": return "Chapel"
+		"watchtower": return "Watchtower"
+		"windmill": return "Windmill"
+		"castle": return "Grand Stone Keep"
+		"fortress": return "Hill Fort"
+		"castle_ruin": return "Ruined Fort"
+		"gatehouse": return "Gatehouse"
+		"bridge": return "Wood Bridge"
+		"stone_bridge": return "Stone Bridge"
+		"wall": return "Crenellated Wall"
+		"stone_wall_low": return "Low Stone Wall"
+		"palisade": return "Timber Palisade"
 		"fence": return "Wood Fence"
-		"oak": return "Oak Tree"
-		"pine": return "Pine"
+		"oak": return "Broadleaf Oak"
+		"pine": return "Tall Pine"
+		"birch": return "Birch Tree"
+		"fruit_tree": return "Fruit Tree"
 		"boulder": return "Boulder"
+		"outcrop": return "Rock Outcrop"
+		"haystack": return "Hay Stack"
+		"well": return "Village Well"
+		"camp": return "Camp"
 		"marker": return "Map Label"
 		"erase": return "Erase Object"
 		_: return object_kind.capitalize()
@@ -746,9 +786,12 @@ func _place_active_object(cell: Vector2i, record_history: bool = true, object_ki
 		node.scale = Vector3.ONE * HOUSE_MODEL_SCALE * scale_factor
 		surface_y -= HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE * scale_factor
 	elif kind == "castle":
-		# One movement cell is approximately 20 feet across; the keep occupies a
-		# substantial 8-cell footprint instead of reading like a tiny token.
-		node.scale = Vector3(2.35, 1.35, 2.35) * scale_factor
+		# The irregular curtain wall spans about eleven movement cells.
+		node.scale = Vector3(2.0, 1.35, 2.0) * scale_factor
+	elif kind == "fortress":
+		node.scale = Vector3(1.35, 1.12, 1.35) * scale_factor
+	elif kind == "castle_ruin":
+		node.scale = Vector3(1.30, 0.92, 1.30) * scale_factor
 	else:
 		node.scale = Vector3.ONE * scale_factor
 	node.position = Vector3(center.x, surface_y, center.z)
@@ -792,25 +835,147 @@ func _create_placeable_node(kind: String) -> Node3D:
 	root.name = "Placed" + _object_label(kind).replace(" ", "")
 	match kind:
 		"cottage":
-			var plaster := BoxMesh.new()
-			plaster.size = Vector3(1.36, 0.92, 1.18)
-			_add_object_mesh(root, plaster, Vector3(0.0, 0.48, 0.0), Color("b79b70"))
-			var roof := PrismMesh.new()
-			roof.size = Vector3(1.62, 1.18, 1.42)
-			_add_object_mesh(root, roof, Vector3(0.0, 1.38, 0.0), Color("594038"))
-			var door := BoxMesh.new()
-			door.size = Vector3(0.28, 0.58, 0.07)
-			_add_object_mesh(root, door, Vector3(0.0, 0.29, 0.62), Color("493528"))
-			var window_mesh := BoxMesh.new()
-			window_mesh.size = Vector3(0.22, 0.24, 0.06)
-			_add_object_mesh(root, window_mesh, Vector3(-0.42, 0.58, 0.62), Color("61757a"))
-			_add_object_mesh(root, window_mesh, Vector3(0.42, 0.58, 0.62), Color("61757a"))
-			var chimney := CylinderMesh.new()
-			chimney.top_radius = 0.11
-			chimney.bottom_radius = 0.13
-			chimney.height = 0.75
-			chimney.radial_segments = 5
-			_add_object_mesh(root, chimney, Vector3(0.42, 1.73, -0.24), Color("776957"))
+			_add_building_shell(root, Vector3(1.36, 0.92, 1.18), 0.52, Color("b79b70"), Color("594038"), Color("493528"))
+			_add_building_chimney(root, Vector3(0.42, 1.85, -0.24))
+		"stone_house":
+			_add_building_shell(root, Vector3(1.48, 1.02, 1.32), 0.56, Color("aaa08d"), Color("58483c"), Color("42372c"))
+			_add_building_chimney(root, Vector3(0.44, 1.92, -0.34))
+		"farmhouse":
+			_add_building_shell(root, Vector3(1.82, 1.18, 1.56), 0.66, Color("b29b73"), Color("60503a"), Color("49372a"))
+			var shed := BoxMesh.new()
+			shed.size = Vector3(0.92, 0.70, 1.06)
+			_add_object_mesh(root, shed, Vector3(-1.02, 0.37, -0.10), Color("9b815c"))
+			var shed_roof := PrismMesh.new()
+			shed_roof.size = Vector3(1.08, 0.54, 1.18)
+			_add_object_mesh(root, shed_roof, Vector3(-1.02, 0.99, -0.10), Color("635039"))
+			_add_building_chimney(root, Vector3(0.58, 2.18, -0.40))
+		"manor":
+			_add_building_shell(root, Vector3(2.10, 1.48, 1.78), 0.76, Color("c0b296"), Color("51463e"), Color("493d32"))
+			var upper_story := BoxMesh.new()
+			upper_story.size = Vector3(1.42, 0.80, 1.36)
+			_add_object_mesh(root, upper_story, Vector3(0.36, 1.88, -0.02), Color("aa9679"))
+			var upper_roof := PrismMesh.new()
+			upper_roof.size = Vector3(1.62, 0.82, 1.58)
+			_add_object_mesh(root, upper_roof, Vector3(0.36, 2.70, -0.02), Color("4a3b34"))
+			var porch := BoxMesh.new()
+			porch.size = Vector3(1.75, 0.13, 0.58)
+			_add_object_mesh(root, porch, Vector3(-0.20, 1.17, 1.10), Color("755a3c"))
+			var porch_post := CylinderMesh.new()
+			porch_post.top_radius = 0.055
+			porch_post.bottom_radius = 0.075
+			porch_post.height = 1.15
+			porch_post.radial_segments = 6
+			_add_object_mesh(root, porch_post, Vector3(-0.88, 0.57, 1.28), Color("564536"))
+			_add_object_mesh(root, porch_post, Vector3(0.46, 0.57, 1.28), Color("564536"))
+		"tavern":
+			_add_building_shell(root, Vector3(1.70, 1.22, 1.46), 0.64, Color("aa8561"), Color("4d382e"), Color("3f2d25"))
+			var sign_beam := BoxMesh.new()
+			sign_beam.size = Vector3(0.55, 0.10, 0.10)
+			_add_object_mesh(root, sign_beam, Vector3(0.76, 1.30, 0.93), Color("46382b"))
+			var signboard := BoxMesh.new()
+			signboard.size = Vector3(0.42, 0.38, 0.09)
+			_add_object_mesh(root, signboard, Vector3(0.96, 1.08, 0.94), Color("c9a957"))
+			var barrel := CylinderMesh.new()
+			barrel.top_radius = 0.19
+			barrel.bottom_radius = 0.16
+			barrel.height = 0.42
+			barrel.radial_segments = 8
+			_add_object_mesh(root, barrel, Vector3(-1.05, 0.22, 0.76), Color("795638"))
+		"chapel":
+			_add_building_shell(root, Vector3(1.66, 1.46, 2.50), 0.48, Color("b3ab99"), Color("51453e"), Color("40352f"))
+			var tower := BoxMesh.new()
+			tower.size = Vector3(0.64, 1.58, 0.72)
+			_add_object_mesh(root, tower, Vector3(0.0, 2.05, -0.82), Color("a69e8d"))
+			var spire := CylinderMesh.new()
+			spire.top_radius = 0.0
+			spire.bottom_radius = 0.50
+			spire.height = 0.98
+			spire.radial_segments = 4
+			_add_object_mesh(root, spire, Vector3(0.0, 3.30, -0.82), Color("463b34"))
+			var cross_post := BoxMesh.new()
+			cross_post.size = Vector3(0.08, 0.55, 0.08)
+			_add_object_mesh(root, cross_post, Vector3(0.0, 4.05, -0.82), Color("c5b98e"))
+			var cross_arm := BoxMesh.new()
+			cross_arm.size = Vector3(0.34, 0.08, 0.08)
+			_add_object_mesh(root, cross_arm, Vector3(0.0, 4.10, -0.82), Color("c5b98e"))
+		"watchtower":
+			var tower_base := CylinderMesh.new()
+			tower_base.top_radius = 0.54
+			tower_base.bottom_radius = 0.68
+			tower_base.height = 2.35
+			tower_base.radial_segments = 8
+			_add_object_mesh(root, tower_base, Vector3(0.0, 1.17, 0.0), Color("918b7d"))
+			var platform := CylinderMesh.new()
+			platform.top_radius = 0.92
+			platform.bottom_radius = 0.78
+			platform.height = 0.30
+			platform.radial_segments = 8
+			_add_object_mesh(root, platform, Vector3(0.0, 2.44, 0.0), Color("71583d"))
+			var watch_roof := CylinderMesh.new()
+			watch_roof.top_radius = 0.0
+			watch_roof.bottom_radius = 0.96
+			watch_roof.height = 0.92
+			watch_roof.radial_segments = 8
+			_add_object_mesh(root, watch_roof, Vector3(0.0, 3.04, 0.0), Color("493b33"))
+			var slit := BoxMesh.new()
+			slit.size = Vector3(0.09, 0.42, 0.05)
+			_add_object_mesh(root, slit, Vector3(0.0, 1.56, 0.65), Color("282a29"))
+		"windmill":
+			var mill_body := CylinderMesh.new()
+			mill_body.top_radius = 0.38
+			mill_body.bottom_radius = 0.68
+			mill_body.height = 2.18
+			mill_body.radial_segments = 8
+			_add_object_mesh(root, mill_body, Vector3(0.0, 1.09, 0.0), Color("b8a27d"))
+			var mill_roof := CylinderMesh.new()
+			mill_roof.top_radius = 0.0
+			mill_roof.bottom_radius = 0.52
+			mill_roof.height = 0.62
+			mill_roof.radial_segments = 8
+			_add_object_mesh(root, mill_roof, Vector3(0.0, 2.48, 0.0), Color("514137"))
+			var hub := SphereMesh.new()
+			hub.radius = 0.16
+			hub.height = 0.28
+			hub.radial_segments = 8
+			hub.rings = 4
+			_add_object_mesh(root, hub, Vector3(0.0, 1.92, 0.53), Color("705438"))
+			for blade_index in range(4):
+				var blade := BoxMesh.new()
+				blade.size = Vector3(0.16, 1.12, 0.07)
+				var blade_node := _add_object_mesh(root, blade, Vector3(0.0, 1.92, 0.58), Color("d4c29d"))
+				blade_node.rotation.z = TAU * float(blade_index) / 4.0
+		"fortress":
+			var hill_ring := _castle_ring_points(4.35, 3.55, Vector2.ZERO, 0.12)
+			_add_castle_wall_ring(root, hill_ring, 1.35, 1.82, 0.48, true, Color("77776d"))
+			for tower_index in range(0, 12, 2):
+				_add_castle_tower(root, hill_ring[tower_index], 2.65 + float(tower_index % 3) * 0.22, 0.48, Color("858174"))
+			var hall := BoxMesh.new()
+			hall.size = Vector3(2.35, 1.65, 1.82)
+			_add_object_mesh(root, hall, Vector3(-0.55, 1.10, -0.54), Color("a7977e"))
+			var hall_roof := PrismMesh.new()
+			hall_roof.size = Vector3(2.58, 1.10, 2.03)
+			_add_object_mesh(root, hall_roof, Vector3(-0.55, 2.48, -0.54), Color("514138"))
+		"castle_ruin":
+			var ruin_ring := _castle_ring_points(4.2, 3.45, Vector2.ZERO, 0.08)
+			for wall_index in range(12):
+				if wall_index % 4 == 1:
+					continue
+				var point_a: Vector2 = ruin_ring[wall_index]
+				var point_b: Vector2 = ruin_ring[(wall_index + 1) % 12]
+				var midpoint := (point_a + point_b) * 0.5
+				var edge := point_b - point_a
+				var broken_wall := BoxMesh.new()
+				broken_wall.size = Vector3(edge.length(), 1.45 + float(wall_index % 3) * 0.42, 0.42)
+				var broken_node := _add_object_mesh(root, broken_wall, Vector3(midpoint.x, broken_wall.size.y * 0.5, midpoint.y), Color("827c6e"))
+				broken_node.rotation.y = atan2(-edge.y, edge.x)
+			for tower_index in [0, 4, 8]:
+				_add_castle_tower(root, ruin_ring[tower_index], 2.15, 0.52, Color("79766b"))
+			for rubble_index in range(7):
+				var rubble := BoxMesh.new()
+				rubble.size = Vector3(0.45 + float(rubble_index % 3) * 0.12, 0.25 + float(rubble_index % 2) * 0.12, 0.38)
+				var angle := TAU * float(rubble_index) / 7.0
+				var debris := _add_object_mesh(root, rubble, Vector3(cos(angle) * 2.4, 0.16, sin(angle) * 1.9), Color("999182"))
+				debris.rotation.y = angle
 		"castle":
 			var outer_ring := _castle_ring_points(5.45, 4.55, Vector2(0.30, 0.20), 0.03)
 			var inner_ring := _castle_ring_points(3.35, 2.85, Vector2(-1.02, -0.64), 0.13)
@@ -924,6 +1089,52 @@ func _create_placeable_node(kind: String) -> Node3D:
 			courtyard_well.height = 0.58
 			courtyard_well.radial_segments = 10
 			_add_object_mesh(root, courtyard_well, Vector3(0.50, 0.32, -2.10), Color("a09b8e"))
+		"gatehouse":
+			var gate_tower := BoxMesh.new()
+			gate_tower.size = Vector3(0.74, 2.65, 0.84)
+			_add_object_mesh(root, gate_tower, Vector3(-0.84, 1.34, 0.0), Color("888477"))
+			_add_object_mesh(root, gate_tower, Vector3(0.84, 1.34, 0.0), Color("888477"))
+			var gate_lintel := BoxMesh.new()
+			gate_lintel.size = Vector3(2.50, 0.70, 1.02)
+			_add_object_mesh(root, gate_lintel, Vector3(0.0, 2.43, 0.0), Color("9d9687"))
+			var gate_roof := PrismMesh.new()
+			gate_roof.size = Vector3(2.78, 0.82, 1.26)
+			_add_object_mesh(root, gate_roof, Vector3(0.0, 3.20, 0.0), Color("514139"))
+			var gate_door := BoxMesh.new()
+			gate_door.size = Vector3(1.12, 1.75, 0.10)
+			_add_object_mesh(root, gate_door, Vector3(0.0, 0.90, 0.54), Color("49382b"))
+		"stone_wall_low":
+			var low_wall := BoxMesh.new()
+			low_wall.size = Vector3(2.35, 0.62, 0.42)
+			_add_object_mesh(root, low_wall, Vector3(0.0, 0.33, 0.0), Color("8d8a7e"))
+			var low_cap := BoxMesh.new()
+			low_cap.size = Vector3(2.45, 0.12, 0.50)
+			_add_object_mesh(root, low_cap, Vector3(0.0, 0.70, 0.0), Color("aaa494"))
+		"palisade":
+			var palisade_rail := BoxMesh.new()
+			palisade_rail.size = Vector3(2.15, 0.12, 0.12)
+			_add_object_mesh(root, palisade_rail, Vector3(0.0, 0.68, 0.0), Color("64472f"))
+			for stake_index in range(8):
+				var stake := PrismMesh.new()
+				stake.size = Vector3(0.24, 1.34, 0.26)
+				var stake_node := _add_object_mesh(root, stake, Vector3(-0.94 + float(stake_index) * 0.27, 0.65, 0.0), Color("805d3e"))
+				stake_node.rotation.y = PI * 0.5
+		"stone_bridge":
+			var stone_deck := BoxMesh.new()
+			stone_deck.size = Vector3(7.60, 0.42, 1.92)
+			_add_object_mesh(root, stone_deck, Vector3(0.0, 0.52, 0.0), Color("8b8b80"))
+			var stone_curb := BoxMesh.new()
+			stone_curb.size = Vector3(7.64, 0.34, 0.18)
+			_add_object_mesh(root, stone_curb, Vector3(0.0, 0.87, -0.90), Color("aaa597"))
+			_add_object_mesh(root, stone_curb, Vector3(0.0, 0.87, 0.90), Color("aaa597"))
+			var bridge_block := BoxMesh.new()
+			bridge_block.size = Vector3(0.35, 0.10, 1.60)
+			for block_index in range(20):
+				_add_object_mesh(root, bridge_block, Vector3(-3.45 + float(block_index) * 0.36, 0.77, 0.0), Color("aaa394"))
+			for arch_index in range(5):
+				var pier := BoxMesh.new()
+				pier.size = Vector3(0.38, 0.94, 1.80)
+				_add_object_mesh(root, pier, Vector3(-3.0 + float(arch_index) * 1.5, 0.0, 0.0), Color("77776e"))
 		"wall":
 			var wall_body := BoxMesh.new()
 			wall_body.size = Vector3(2.45, 1.15, 0.34)
@@ -963,6 +1174,45 @@ func _create_placeable_node(kind: String) -> Node3D:
 				var x_offset := -3.72 + float(post_index) * 0.62
 				_add_object_mesh(root, post, Vector3(x_offset, 0.78, -0.88), Color("634b35"))
 				_add_object_mesh(root, post, Vector3(x_offset, 0.78, 0.88), Color("634b35"))
+		"birch":
+			var birch_trunk := CylinderMesh.new()
+			birch_trunk.top_radius = 0.055
+			birch_trunk.bottom_radius = 0.12
+			birch_trunk.height = 1.80
+			birch_trunk.radial_segments = 7
+			_add_object_mesh(root, birch_trunk, Vector3(0.0, 0.90, 0.0), Color("d2cdb7"))
+			var birch_mark := BoxMesh.new()
+			birch_mark.size = Vector3(0.14, 0.06, 0.018)
+			for mark_index in range(4):
+				_add_object_mesh(root, birch_mark, Vector3(0.0, 0.38 + float(mark_index) * 0.30, 0.116), Color("493f36"))
+			var birch_crown := SphereMesh.new()
+			birch_crown.radius = 0.44
+			birch_crown.height = 0.92
+			birch_crown.radial_segments = 7
+			birch_crown.rings = 4
+			_add_object_mesh(root, birch_crown, Vector3(0.0, 1.82, 0.0), Color("5d884b"), Vector3(0.78, 1.10, 0.78))
+			_add_object_mesh(root, birch_crown, Vector3(0.24, 1.55, -0.10), Color("82a75c"), Vector3(0.62, 0.76, 0.64))
+		"fruit_tree":
+			var fruit_trunk := CylinderMesh.new()
+			fruit_trunk.top_radius = 0.08
+			fruit_trunk.bottom_radius = 0.13
+			fruit_trunk.height = 0.92
+			fruit_trunk.radial_segments = 7
+			_add_object_mesh(root, fruit_trunk, Vector3(0.0, 0.46, 0.0), Color("765338"))
+			var fruit_crown := SphereMesh.new()
+			fruit_crown.radius = 0.48
+			fruit_crown.height = 0.85
+			fruit_crown.radial_segments = 7
+			fruit_crown.rings = 4
+			_add_object_mesh(root, fruit_crown, Vector3(0.0, 1.05, 0.0), Color("4e7b3c"))
+			var fruit := SphereMesh.new()
+			fruit.radius = 0.09
+			fruit.height = 0.16
+			fruit.radial_segments = 6
+			fruit.rings = 3
+			for fruit_index in range(7):
+				var angle := TAU * float(fruit_index) / 7.0
+				_add_object_mesh(root, fruit, Vector3(cos(angle) * 0.38, 0.94 + float(fruit_index % 3) * 0.18, sin(angle) * 0.38), Color("c85b35"))
 		"oak":
 			var oak_trunk := CylinderMesh.new()
 			oak_trunk.top_radius = 0.07
@@ -992,6 +1242,62 @@ func _create_placeable_node(kind: String) -> Node3D:
 				cone.height = 0.78
 				cone.radial_segments = 7
 				_add_object_mesh(root, cone, Vector3(0.0, 0.64 + float(tier) * 0.34, 0.0), [Color("315f3e"), Color("3d7544"), Color("4a8248")][tier])
+		"outcrop":
+			var outcrop_rock := SphereMesh.new()
+			outcrop_rock.radius = 0.60
+			outcrop_rock.height = 0.92
+			outcrop_rock.radial_segments = 6
+			outcrop_rock.rings = 3
+			var outcrop_a := _add_object_mesh(root, outcrop_rock, Vector3(-0.38, 0.40, -0.08), Color("777970"), Vector3(1.22, 0.85, 0.90))
+			outcrop_a.rotation.z = -0.12
+			var outcrop_b := _add_object_mesh(root, outcrop_rock, Vector3(0.32, 0.32, 0.14), Color("92938b"), Vector3(0.86, 0.72, 0.82))
+			outcrop_b.rotation.z = 0.16
+			_add_object_mesh(root, outcrop_rock, Vector3(0.0, 0.64, -0.10), Color("a1a195"), Vector3(0.70, 0.84, 0.72))
+		"haystack":
+			var hay := CylinderMesh.new()
+			hay.top_radius = 0.04
+			hay.bottom_radius = 0.52
+			hay.height = 0.95
+			hay.radial_segments = 9
+			_add_object_mesh(root, hay, Vector3(0.0, 0.48, 0.0), Color("c3a65e"))
+			var hay_band := TorusMesh.new()
+			hay_band.inner_radius = 0.43
+			hay_band.outer_radius = 0.49
+			_add_object_mesh(root, hay_band, Vector3(0.0, 0.33, 0.0), Color("8e7141"))
+		"well":
+			var well_ring := TorusMesh.new()
+			well_ring.inner_radius = 0.31
+			well_ring.outer_radius = 0.48
+			_add_object_mesh(root, well_ring, Vector3(0.0, 0.30, 0.0), Color("8d8a7d"))
+			var well_pillar := CylinderMesh.new()
+			well_pillar.top_radius = 0.07
+			well_pillar.bottom_radius = 0.07
+			well_pillar.height = 1.18
+			well_pillar.radial_segments = 6
+			_add_object_mesh(root, well_pillar, Vector3(-0.47, 0.72, 0.0), Color("684b32"))
+			_add_object_mesh(root, well_pillar, Vector3(0.47, 0.72, 0.0), Color("684b32"))
+			var well_beam := BoxMesh.new()
+			well_beam.size = Vector3(1.15, 0.12, 0.12)
+			_add_object_mesh(root, well_beam, Vector3(0.0, 1.34, 0.0), Color("765538"))
+			var well_roof := PrismMesh.new()
+			well_roof.size = Vector3(1.35, 0.70, 1.00)
+			_add_object_mesh(root, well_roof, Vector3(0.0, 1.70, 0.0), Color("514039"))
+		"camp":
+			var tent := PrismMesh.new()
+			tent.size = Vector3(1.15, 0.95, 1.42)
+			_add_object_mesh(root, tent, Vector3(-0.32, 0.48, 0.0), Color("a78a55"))
+			var tent_flap := BoxMesh.new()
+			tent_flap.size = Vector3(0.48, 0.63, 0.05)
+			_add_object_mesh(root, tent_flap, Vector3(-0.32, 0.34, 0.72), Color("544332"))
+			var camp_log := CylinderMesh.new()
+			camp_log.top_radius = 0.07
+			camp_log.bottom_radius = 0.08
+			camp_log.height = 0.65
+			camp_log.radial_segments = 6
+			var log_a := _add_object_mesh(root, camp_log, Vector3(0.45, 0.10, 0.22), Color("694c31"))
+			log_a.rotation.z = PI * 0.5
+			var log_b := _add_object_mesh(root, camp_log, Vector3(0.45, 0.10, -0.22), Color("765438"))
+			log_b.rotation.z = PI * 0.5
 		"boulder":
 			var rock := SphereMesh.new()
 			rock.radius = 0.48
@@ -1039,6 +1345,49 @@ func _add_keep_window(root: Node3D, center: Vector3, width: float = 0.20, height
 	var sill := BoxMesh.new()
 	sill.size = Vector3(width + 0.18, 0.11, 0.16)
 	_add_object_mesh(root, sill, center + Vector3(0.0, -height * 0.5 - 0.06, 0.025), Color("8f897b"))
+
+func _add_building_shell(root: Node3D, footprint: Vector3, wall_height: float, wall_color: Color, roof_color: Color, door_color: Color) -> void:
+	var foundation := BoxMesh.new()
+	foundation.size = Vector3(footprint.x + 0.16, 0.16, footprint.z + 0.16)
+	_add_object_mesh(root, foundation, Vector3(0.0, 0.08, 0.0), wall_color.darkened(0.18))
+	var walls := BoxMesh.new()
+	walls.size = Vector3(footprint.x, wall_height, footprint.z)
+	_add_object_mesh(root, walls, Vector3(0.0, 0.16 + wall_height * 0.5, 0.0), wall_color)
+	var roof := PrismMesh.new()
+	roof.size = Vector3(footprint.x + 0.28, maxf(0.64, footprint.y * 1.22), footprint.z + 0.32)
+	_add_object_mesh(root, roof, Vector3(0.0, wall_height + 0.22, 0.0), roof_color)
+	var door := BoxMesh.new()
+	door.size = Vector3(0.28, wall_height * 0.73, 0.07)
+	_add_object_mesh(root, door, Vector3(0.0, 0.16 + door.size.y * 0.5, footprint.z * 0.5 + 0.045), door_color)
+	var window_y := 0.16 + wall_height * 0.64
+	var window_z := footprint.z * 0.5 + 0.045
+	_add_building_window(root, Vector3(-footprint.x * 0.28, window_y, window_z), 0.19)
+	_add_building_window(root, Vector3(footprint.x * 0.28, window_y, window_z), 0.19)
+	var side_window := BoxMesh.new()
+	side_window.size = Vector3(0.06, 0.22, 0.18)
+	_add_object_mesh(root, side_window, Vector3(footprint.x * 0.5 + 0.035, window_y, -footprint.z * 0.12), Color("718184"))
+
+func _add_building_window(root: Node3D, position: Vector3, width: float) -> void:
+	var frame := BoxMesh.new()
+	frame.size = Vector3(width + 0.12, 0.34, 0.07)
+	_add_object_mesh(root, frame, position, Color("594536"))
+	var pane := BoxMesh.new()
+	pane.size = Vector3(width, 0.24, 0.035)
+	_add_object_mesh(root, pane, position + Vector3(0.0, 0.0, 0.045), Color("657c80"))
+	var mullion := BoxMesh.new()
+	mullion.size = Vector3(0.035, 0.24, 0.04)
+	_add_object_mesh(root, mullion, position + Vector3(0.0, 0.0, 0.068), Color("594536"))
+
+func _add_building_chimney(root: Node3D, position: Vector3) -> void:
+	var chimney := CylinderMesh.new()
+	chimney.top_radius = 0.10
+	chimney.bottom_radius = 0.14
+	chimney.height = 0.74
+	chimney.radial_segments = 7
+	_add_object_mesh(root, chimney, position, Color("776957"))
+	var chimney_cap := BoxMesh.new()
+	chimney_cap.size = Vector3(0.30, 0.10, 0.25)
+	_add_object_mesh(root, chimney_cap, position + Vector3(0.0, 0.40, 0.0), Color("8d8171"))
 
 func _castle_ring_points(radius_x: float, radius_z: float, offset: Vector2, phase: float) -> Array[Vector2]:
 	var points: Array[Vector2] = []
@@ -1107,7 +1456,7 @@ func _add_object_mesh(parent: Node3D, mesh: Mesh, local_position: Vector3, color
 	instance.mesh = mesh
 	instance.position = local_position
 	instance.scale = local_scale
-	if parent.name == "PlacedStoneKeep":
+	if parent.name in ["PlacedGrandStoneKeep", "PlacedHillFort", "PlacedRuinedFort"]:
 		var castle_material := ShaderMaterial.new()
 		castle_material.shader = load("res://assets/materials/castle_stone.gdshader") as Shader
 		castle_material.set_shader_parameter("base_color", color)
@@ -1125,8 +1474,9 @@ func _add_object_mesh(parent: Node3D, mesh: Mesh, local_position: Vector3, color
 
 func _object_footprint_radius(kind: String) -> int:
 	match kind:
-		"castle": return 5
-		"bridge": return 2
+		"castle", "fortress", "castle_ruin": return 5
+		"bridge", "stone_bridge": return 2
+		"gatehouse": return 1
 		"wall", "fence": return 0
 		_: return 0
 
@@ -1739,7 +2089,7 @@ func _load_map_file(path: String) -> void:
 			var record: Dictionary = record_variant
 			var cell := Vector2i(int(record.get("x", -1)), int(record.get("y", -1)))
 			var kind := str(record.get("type", ""))
-			if not grid.contains(cell) or not ["house", "cottage", "castle", "bridge", "wall", "fence", "oak", "pine", "boulder", "marker"].has(kind):
+			if not grid.contains(cell) or not ["house", "cottage", "stone_house", "farmhouse", "manor", "tavern", "chapel", "watchtower", "windmill", "castle", "fortress", "castle_ruin", "gatehouse", "bridge", "stone_bridge", "wall", "stone_wall_low", "palisade", "fence", "oak", "pine", "birch", "fruit_tree", "boulder", "outcrop", "haystack", "well", "camp", "marker"].has(kind):
 				continue
 			_place_active_object(
 				cell,
