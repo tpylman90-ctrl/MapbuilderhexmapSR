@@ -215,6 +215,12 @@ func _build_editor_ui() -> void:
 	_add_object_button(object_grid, "Boulder", "boulder")
 	_add_object_button(object_grid, "Marker / Label", "marker")
 	_add_object_button(object_grid, "Erase Object", "erase")
+	_add_section_title(objects_page, "MOVEMENT SCALE")
+	var scale_note := Label.new()
+	scale_note.text = "1 movement cell ≈ 20 ft • keep spans about 9 cells • bridge about 5"
+	scale_note.add_theme_color_override("font_color", Color("c7c7b8"))
+	scale_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	objects_page.add_child(scale_note)
 	_add_section_title(objects_page, "LOCATION LABEL")
 	_marker_label_input = LineEdit.new()
 	_marker_label_input.text = "Landmark"
