@@ -622,9 +622,8 @@ func _rebuild_cliffs() -> void:
 	if data == null:
 		return
 
-	var surface := SurfaceTool.new()
-	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var face_count := 0
+	var cliff_segments: Array[Dictionary] = []
+	var boundary_levels: Dictionary = {}
 	for row in range(HexGrid.ROWS):
 		for column in range(HexGrid.COLUMNS):
 			var cell := Vector2i(column, row)
@@ -640,11 +639,22 @@ func _rebuild_cliffs() -> void:
 				var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
 				var top_a := Vector3(center.x + cos(angle_a) * EDGE_RADIUS, float(high_level) * STEP_HEIGHT + CAP_HEIGHT * 0.5, center.z + sin(angle_a) * EDGE_RADIUS)
 				var top_b := Vector3(center.x + cos(angle_b) * EDGE_RADIUS, float(high_level) * STEP_HEIGHT + CAP_HEIGHT * 0.5, center.z + sin(angle_b) * EDGE_RADIUS)
-				var bottom_a := Vector3(top_a.x, float(low_level) * STEP_HEIGHT + CAP_HEIGHT * 0.5, top_a.z)
-				var bottom_b := Vector3(top_b.x, float(low_level) * STEP_HEIGHT + CAP_HEIGHT * 0.5, top_b.z)
-				_add_cliff_wall(surface, top_a, top_b, bottom_a, bottom_b)
-				face_count += 1
-	if face_count == 0:
+				var key_a := Vector2i(roundi(top_a.x * 1000.0), roundi(top_a.z * 1000.0))
+				var key_b := Vector2i(roundi(top_b.x * 1000.0), roundi(top_b.z * 1000.0))
+				boundary_levels[key_a] = mini(int(boundary_levels.get(key_a, low_level)), low_level)
+				boundary_levels[key_b] = mini(int(boundary_levels.get(key_b, low_level)), low_level)
+				cliff_segments.append({"top_a": top_a, "top_b": top_b, "key_a": key_a, "key_b": key_b})
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for segment in cliff_segments:
+		var top_a: Vector3 = segment["top_a"]
+		var top_b: Vector3 = segment["top_b"]
+		var key_a: Vector2i = segment["key_a"]
+		var key_b: Vector2i = segment["key_b"]
+		var bottom_a := Vector3(top_a.x, float(boundary_levels[key_a]) * STEP_HEIGHT + CAP_HEIGHT * 0.5, top_a.z)
+		var bottom_b := Vector3(top_b.x, float(boundary_levels[key_b]) * STEP_HEIGHT + CAP_HEIGHT * 0.5, top_b.z)
+		_add_cliff_wall(surface, top_a, top_b, bottom_a, bottom_b)
+	if cliff_segments.is_empty():
 		cliff_shader_material = null
 		return
 	surface.index()
@@ -686,14 +696,17 @@ func _cliff_vertex(top_a: Vector3, top_b: Vector3, bottom_a: Vector3, bottom_b: 
 	top.y = _surface_height_at(top.x, top.z)
 	var bottom := bottom_a.lerp(bottom_b, edge_ratio)
 	var point := top.lerp(bottom, vertical_ratio)
-	# Dense curved sections break the hex outline into a continuous rock run.
-	# The middle swells and the cap and toe remain joined to the ground surface.
+	# Curved subdivisions break up the hex trace and join neighboring rock runs.
 	var edge_envelope := sin(edge_ratio * PI)
 	var vertical_envelope := sin(vertical_ratio * PI)
 	var broad_noise := cliff_noise.get_noise_3d(point.x * 0.36, point.y * 0.28, point.z * 0.36)
 	var detail_noise := cliff_noise.get_noise_3d(point.x * 1.8 + 21.0, point.y * 0.8, point.z * 1.8 - 14.0)
 	var ledge := sin(vertical_ratio * PI * 2.6 + broad_noise * 1.5) * 0.12
-	point += wall_normal * edge_envelope * vertical_envelope * (broad_noise * 0.48 + detail_noise * 0.12 + ledge) * cliff_detail_strength
+	var top_lip := edge_envelope * broad_noise * 0.24 * (1.0 - vertical_ratio)
+	var face_swell := edge_envelope * vertical_envelope * (broad_noise * 0.44 + detail_noise * 0.16 + ledge)
+	point += wall_normal * (top_lip + face_swell) * cliff_detail_strength
+	if vertical_ratio < 0.001:
+		point.y = _surface_height_at(point.x, point.z)
 	point.y += vertical_envelope * detail_noise * 0.13 * cliff_detail_strength
 	return point
 

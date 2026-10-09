@@ -612,76 +612,8 @@ func _object_label(object_kind: String) -> String:
 	match object_kind:
 		"house": return "Cartoon House"
 		"cottage": return "Village Cottage"
-		"castle":
-			var outer_ring := _castle_ring_points(5.0, 4.55, Vector2.ZERO, 0.0)
-			var inner_ring := _castle_ring_points(3.35, 3.0, Vector2(-0.48, -0.34), 0.13)
-			_add_castle_wall_ring(root, outer_ring, 0.98, 1.75, 0.48, true, Color("77756b"))
-			_add_castle_wall_ring(root, inner_ring, 2.35, 2.05, 0.52, true, Color("858174"))
-			for tower_index in range(12):
-				var outer_point := outer_ring[tower_index]
-				if tower_index % 3 == 0:
-					_add_castle_tower(root, outer_point, 2.9, 0.68, Color("858174"))
-				if tower_index % 3 == 1:
-					_add_castle_tower(root, inner_ring[tower_index], 2.55, 0.58, Color("908a7c"))
-			# Gatehouse bridges the outer curtain wall and opens into a covered entry.
-			var gate_left := BoxMesh.new()
-			gate_left.size = Vector3(1.45, 2.25, 1.4)
-			_add_object_mesh(root, gate_left, Vector3(-1.42, 1.55, 4.15), Color("8b8679"))
-			_add_object_mesh(root, gate_left, Vector3(1.42, 1.55, 4.15), Color("8b8679"))
-			var gate_arch := BoxMesh.new()
-			gate_arch.size = Vector3(4.25, 0.72, 1.55)
-			_add_object_mesh(root, gate_arch, Vector3(0.0, 2.92, 4.15), Color("969082"))
-			var gate_roof := PrismMesh.new()
-			gate_roof.size = Vector3(4.65, 0.95, 1.85)
-			_add_object_mesh(root, gate_roof, Vector3(0.0, 3.48, 4.15), Color("59463d"))
-			var portcullis := BoxMesh.new()
-			portcullis.size = Vector3(1.65, 1.82, 0.12)
-			_add_object_mesh(root, portcullis, Vector3(0.0, 1.02, 4.88), Color("493b2e"))
-			for bar_index in range(7):
-				var iron_bar := BoxMesh.new()
-				iron_bar.size = Vector3(0.07, 1.72, 0.08)
-				_add_object_mesh(root, iron_bar, Vector3(-0.68 + float(bar_index) * 0.225, 1.02, 4.78), Color("37352f"))
-			# The keep rises above two separate defensive wards.
-			var keep_lower := BoxMesh.new()
-			keep_lower.size = Vector3(3.5, 3.0, 3.15)
-			_add_object_mesh(root, keep_lower, Vector3(-0.34, 3.18, -0.56), Color("8e897b"))
-			var keep_upper := BoxMesh.new()
-			keep_upper.size = Vector3(2.55, 2.55, 2.38)
-			_add_object_mesh(root, keep_upper, Vector3(0.12, 5.90, -0.55), Color("aaa391"))
-			var keep_roof := CylinderMesh.new()
-			keep_roof.top_radius = 0.0
-			keep_roof.bottom_radius = 1.78
-			keep_roof.height = 1.45
-			keep_roof.radial_segments = 6
-			_add_object_mesh(root, keep_roof, Vector3(0.12, 7.80, -0.55), Color("59463d"), Vector3(1.0, 1.0, 0.82))
-			# Three unequal roof turrets and the inner ward chapel give the skyline height.
-			for turret_index in range(3):
-				var tx: float = [-1.0, 0.58, 1.12][turret_index]
-				var tz: float = [-0.72, -0.38, -0.82][turret_index]
-				var turret := CylinderMesh.new()
-				turret.top_radius = 0.32
-				turret.bottom_radius = 0.43
-				turret.height = 1.45 + float(turret_index % 2) * 0.42
-				turret.radial_segments = 8
-				_add_object_mesh(root, turret, Vector3(tx, 7.20, tz), Color("938d7f"))
-				var turret_roof := CylinderMesh.new()
-				turret_roof.top_radius = 0.0
-				turret_roof.bottom_radius = 0.55
-				turret_roof.height = 0.86
-				turret_roof.radial_segments = 8
-				_add_object_mesh(root, turret_roof, Vector3(tx, 8.28 + float(turret_index % 2) * 0.42, tz), Color("504037"))
-			var hall := BoxMesh.new()
-			hall.size = Vector3(2.25, 1.22, 1.72)
-			_add_object_mesh(root, hall, Vector3(1.62, 0.88, -1.58), Color("9a927e"))
-			var hall_roof := PrismMesh.new()
-			hall_roof.size = Vector3(2.48, 0.88, 1.95)
-			_add_object_mesh(root, hall_roof, Vector3(1.62, 1.84, -1.58), Color("59463d"))
-			var courtyard_well := CylinderMesh.new()
-			courtyard_well.top_radius = 0.34
-			courtyard_well.bottom_radius = 0.42
-			courtyard_well.height = 0.48
-			courtyard_well.radial_segments = 10
-			_add_object_mesh(root, courtyard_well, Vector3(-1.62, 0.28, -1.35), Color("a09b8e"))
+		"castle": return "Stone Keep"
+		"bridge": return "Stone Bridge"
 		"wall": return "Stone Wall"
 		"fence": return "Wood Fence"
 		"oak": return "Oak Tree"
@@ -816,7 +748,7 @@ func _place_active_object(cell: Vector2i, record_history: bool = true, object_ki
 	elif kind == "castle":
 		# One movement cell is approximately 20 feet across; the keep occupies a
 		# substantial 8-cell footprint instead of reading like a tiny token.
-		node.scale = Vector3(1.55, 1.30, 1.55) * scale_factor
+		node.scale = Vector3(2.35, 1.35, 2.35) * scale_factor
 	else:
 		node.scale = Vector3.ONE * scale_factor
 	node.position = Vector3(center.x, surface_y, center.z)
@@ -880,55 +812,75 @@ func _create_placeable_node(kind: String) -> Node3D:
 			chimney.radial_segments = 5
 			_add_object_mesh(root, chimney, Vector3(0.42, 1.73, -0.24), Color("776957"))
 		"castle":
-			var curtain_wall := BoxMesh.new()
-			curtain_wall.size = Vector3(5.3, 1.55, 0.42)
-			_add_object_mesh(root, curtain_wall, Vector3(0.0, 1.05, -2.55), Color("77756b"))
-			_add_object_mesh(root, curtain_wall, Vector3(-2.55, 1.05, 0.0), Color("716f66"), Vector3(0.16, 1.0, 1.0))
-			_add_object_mesh(root, curtain_wall, Vector3(2.55, 1.05, 0.0), Color("716f66"), Vector3(0.16, 1.0, 1.0))
+			var outer_ring := _castle_ring_points(5.0, 4.55, Vector2.ZERO, 0.0)
+			var inner_ring := _castle_ring_points(3.35, 3.0, Vector2(-0.48, -0.34), 0.13)
+			_add_castle_wall_ring(root, outer_ring, 0.98, 1.75, 0.48, true, Color("77756b"))
+			_add_castle_wall_ring(root, inner_ring, 2.35, 2.05, 0.52, true, Color("858174"))
+			for tower_index in range(12):
+				var outer_point := outer_ring[tower_index]
+				if tower_index % 3 == 0:
+					_add_castle_tower(root, outer_point, 2.9, 0.68, Color("858174"))
+				if tower_index % 3 == 1:
+					_add_castle_tower(root, inner_ring[tower_index], 2.55, 0.58, Color("908a7c"))
+			# Gatehouse bridges the outer curtain wall and opens into a covered entry.
 			var gate_left := BoxMesh.new()
-			gate_left.size = Vector3(1.55, 1.55, 0.42)
-			_add_object_mesh(root, gate_left, Vector3(-1.86, 1.05, 2.55), Color("77756b"))
-			_add_object_mesh(root, gate_left, Vector3(1.86, 1.05, 2.55), Color("77756b"))
-			var gatehouse := BoxMesh.new()
-			gatehouse.size = Vector3(1.42, 2.3, 0.55)
-			_add_object_mesh(root, gatehouse, Vector3(0.0, 1.25, 2.55), Color("857f72"))
-			var keep := BoxMesh.new()
-			keep.size = Vector3(2.45, 3.55, 2.15)
-			_add_object_mesh(root, keep, Vector3(0.0, 1.80, -0.10), Color("8c887b"))
+			gate_left.size = Vector3(1.45, 2.25, 1.4)
+			_add_object_mesh(root, gate_left, Vector3(-1.42, 1.55, 4.15), Color("8b8679"))
+			_add_object_mesh(root, gate_left, Vector3(1.42, 1.55, 4.15), Color("8b8679"))
+			var gate_arch := BoxMesh.new()
+			gate_arch.size = Vector3(4.25, 0.72, 1.55)
+			_add_object_mesh(root, gate_arch, Vector3(0.0, 2.92, 4.15), Color("969082"))
+			var gate_roof := PrismMesh.new()
+			gate_roof.size = Vector3(4.65, 0.95, 1.85)
+			_add_object_mesh(root, gate_roof, Vector3(0.0, 3.48, 4.15), Color("59463d"))
+			var portcullis := BoxMesh.new()
+			portcullis.size = Vector3(1.65, 1.82, 0.12)
+			_add_object_mesh(root, portcullis, Vector3(0.0, 1.02, 4.88), Color("493b2e"))
+			for bar_index in range(7):
+				var iron_bar := BoxMesh.new()
+				iron_bar.size = Vector3(0.07, 1.72, 0.08)
+				_add_object_mesh(root, iron_bar, Vector3(-0.68 + float(bar_index) * 0.225, 1.02, 4.78), Color("37352f"))
+			# The keep rises above two separate defensive wards.
+			var keep_lower := BoxMesh.new()
+			keep_lower.size = Vector3(3.5, 3.0, 3.15)
+			_add_object_mesh(root, keep_lower, Vector3(-0.34, 3.18, -0.56), Color("8e897b"))
+			var keep_upper := BoxMesh.new()
+			keep_upper.size = Vector3(2.55, 2.55, 2.38)
+			_add_object_mesh(root, keep_upper, Vector3(0.12, 5.90, -0.55), Color("aaa391"))
 			var keep_roof := CylinderMesh.new()
 			keep_roof.top_radius = 0.0
-			keep_roof.bottom_radius = 1.55
-			keep_roof.height = 1.25
-			keep_roof.radial_segments = 4
-			_add_object_mesh(root, keep_roof, Vector3(0.0, 4.18, -0.10), Color("59463d"), Vector3(1.0, 1.0, 0.78))
-			for side in range(4):
-				var tower := CylinderMesh.new()
-				tower.top_radius = 0.48
-				tower.bottom_radius = 0.58
-				tower.height = 2.75
-				tower.radial_segments = 8
-				var tx := -2.48 if side < 2 else 2.48
-				var tz := -2.48 if side % 2 == 0 else 2.48
-				_add_object_mesh(root, tower, Vector3(tx, 1.40, tz), Color("858174"))
-				var tower_roof := CylinderMesh.new()
-				tower_roof.top_radius = 0.0
-				tower_roof.bottom_radius = 0.62
-				tower_roof.height = 0.90
-				tower_roof.radial_segments = 8
-				_add_object_mesh(root, tower_roof, Vector3(tx, 3.20, tz), Color("58443b"))
-			var merlon := BoxMesh.new()
-			merlon.size = Vector3(0.34, 0.40, 0.42)
-			for crenel in range(12):
-				var offset := -2.35 + float(crenel) * 0.43
-				_add_object_mesh(root, merlon, Vector3(offset, 2.00, -2.55), Color("969184"))
-				if crenel < 4 or crenel > 7:
-					_add_object_mesh(root, merlon, Vector3(offset, 2.00, 2.55), Color("969184"))
-			var side_merlon := BoxMesh.new()
-			side_merlon.size = Vector3(0.42, 0.40, 0.34)
-			for crenel in range(10):
-				var offset := -1.95 + float(crenel) * 0.43
-				_add_object_mesh(root, side_merlon, Vector3(-2.55, 2.00, offset), Color("969184"))
-				_add_object_mesh(root, side_merlon, Vector3(2.55, 2.00, offset), Color("969184"))
+			keep_roof.bottom_radius = 1.78
+			keep_roof.height = 1.45
+			keep_roof.radial_segments = 6
+			_add_object_mesh(root, keep_roof, Vector3(0.12, 7.80, -0.55), Color("59463d"), Vector3(1.0, 1.0, 0.82))
+			# Three unequal roof turrets and the inner ward chapel give the skyline height.
+			for turret_index in range(3):
+				var tx: float = [-1.0, 0.58, 1.12][turret_index]
+				var tz: float = [-0.72, -0.38, -0.82][turret_index]
+				var turret := CylinderMesh.new()
+				turret.top_radius = 0.32
+				turret.bottom_radius = 0.43
+				turret.height = 1.45 + float(turret_index % 2) * 0.42
+				turret.radial_segments = 8
+				_add_object_mesh(root, turret, Vector3(tx, 7.20, tz), Color("938d7f"))
+				var turret_roof := CylinderMesh.new()
+				turret_roof.top_radius = 0.0
+				turret_roof.bottom_radius = 0.55
+				turret_roof.height = 0.86
+				turret_roof.radial_segments = 8
+				_add_object_mesh(root, turret_roof, Vector3(tx, 8.28 + float(turret_index % 2) * 0.42, tz), Color("504037"))
+			var hall := BoxMesh.new()
+			hall.size = Vector3(2.25, 1.22, 1.72)
+			_add_object_mesh(root, hall, Vector3(1.62, 0.88, -1.58), Color("9a927e"))
+			var hall_roof := PrismMesh.new()
+			hall_roof.size = Vector3(2.48, 0.88, 1.95)
+			_add_object_mesh(root, hall_roof, Vector3(1.62, 1.84, -1.58), Color("59463d"))
+			var courtyard_well := CylinderMesh.new()
+			courtyard_well.top_radius = 0.34
+			courtyard_well.bottom_radius = 0.42
+			courtyard_well.height = 0.48
+			courtyard_well.radial_segments = 10
+			_add_object_mesh(root, courtyard_well, Vector3(-1.62, 0.28, -1.35), Color("a09b8e"))
 		"wall":
 			var wall_body := BoxMesh.new()
 			wall_body.size = Vector3(2.45, 1.15, 0.34)
@@ -1033,63 +985,6 @@ func _create_placeable_node(kind: String) -> Node3D:
 			root.free()
 			return null
 	return root
-
-func _castle_ring_points(radius_x: float, radius_z: float, offset: Vector2, phase: float) -> Array[Vector2]:
-	var points: Array[Vector2] = []
-	var irregularity: Array[float] = [1.0, 0.94, 1.06, 0.97, 1.03, 0.91, 1.05, 0.96, 1.04, 0.93, 1.07, 0.98]
-	for point_index in range(12):
-		var angle := TAU * float(point_index) / 12.0 + phase
-		var factor: float = irregularity[point_index]
-		points.append(offset + Vector2(cos(angle) * radius_x * factor, sin(angle) * radius_z * factor))
-	return points
-
-func _add_castle_wall_ring(root: Node3D, points: Array[Vector2], center_y: float, wall_height: float, thickness: float, has_gate: bool, color: Color) -> void:
-	for point_index in range(points.size()):
-		var a := points[point_index]
-		var b := points[(point_index + 1) % points.size()]
-		var midpoint := (a + b) * 0.5
-		if has_gate and midpoint.y > 0.78 * maxf(absf(a.y), absf(b.y)):
-			continue
-		var edge := b - a
-		var length := edge.length()
-		var yaw := atan2(-edge.y, edge.x)
-		var wall := BoxMesh.new()
-		wall.size = Vector3(length + 0.20, wall_height, thickness)
-		var segment_center := Vector3(midpoint.x, center_y, midpoint.y)
-		var wall_instance := _add_object_mesh(root, wall, segment_center, color)
-		wall_instance.rotation.y = yaw
-		var coping := BoxMesh.new()
-		coping.size = Vector3(length + 0.26, 0.20, thickness + 0.16)
-		var coping_instance := _add_object_mesh(root, coping, Vector3(midpoint.x, center_y + wall_height * 0.5 + 0.08, midpoint.y), color.lightened(0.12))
-		coping_instance.rotation.y = yaw
-		var merlons := maxi(1, roundi(length / 0.72))
-		for merlon_index in range(merlons):
-			var along := (float(merlon_index) + 0.5) / float(merlons) - 0.5
-			var merlon := BoxMesh.new()
-			merlon.size = Vector3(0.34, 0.34, thickness + 0.10)
-			var position := Vector3(midpoint.x + edge.x * along, center_y + wall_height * 0.5 + 0.31, midpoint.y + edge.y * along)
-			var merlon_instance := _add_object_mesh(root, merlon, position, color.lightened(0.20))
-			merlon_instance.rotation.y = yaw
-
-func _add_castle_tower(root: Node3D, point: Vector2, height: float, radius: float, color: Color) -> void:
-	var shaft := CylinderMesh.new()
-	shaft.top_radius = radius * 0.88
-	shaft.bottom_radius = radius
-	shaft.height = height
-	shaft.radial_segments = 10
-	_add_object_mesh(root, shaft, Vector3(point.x, height * 0.5, point.y), color)
-	var battlement := CylinderMesh.new()
-	battlement.top_radius = radius * 1.18
-	battlement.bottom_radius = radius * 1.18
-	battlement.height = 0.20
-	battlement.radial_segments = 10
-	_add_object_mesh(root, battlement, Vector3(point.x, height + 0.08, point.y), color.lightened(0.15))
-	var roof := CylinderMesh.new()
-	roof.top_radius = 0.0
-	roof.bottom_radius = radius * 1.22
-	roof.height = radius * 1.55
-	roof.radial_segments = 8
-	_add_object_mesh(root, roof, Vector3(point.x, height + radius * 0.92, point.y), Color("58443b"))
 
 func _add_object_mesh(parent: Node3D, mesh: Mesh, local_position: Vector3, color: Color, local_scale: Vector3 = Vector3.ONE) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
