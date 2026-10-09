@@ -46,6 +46,8 @@ void vertex() {
 	float blue_water = smoothstep(0.10, 0.28, c.b - c.r);
 	float sand_mask = warm * (1.0 - pale) * smoothstep(0.52, 0.68, mean_color) * (1.0 - blue_water);
 	float snow_mask = pale * (1.0 - blue_water);
+	float ash_mask = (1.0 - smoothstep(0.28, 0.36, mean_color)) * (1.0 - blue_water);
+	float lava_mask = smoothstep(0.20, 0.40, c.r - c.g) * smoothstep(0.34, 0.48, mean_color);
 	float stone_mask = smoothstep(0.53, 0.63, mean_color) * (1.0 - smoothstep(0.025, 0.10, abs(c.r - c.g))) * (1.0 - snow_mask) * (1.0 - blue_water);
 	float mud_mask = (1.0 - smoothstep(0.38, 0.45, mean_color)) * (1.0 - smoothstep(0.02, 0.095, abs(c.r - c.g))) * (1.0 - blue_water);
 	float broad_noise = value_noise(vec3(p.x * 0.48, 3.0, p.z * 0.48));
@@ -54,8 +56,10 @@ void vertex() {
 	float snow_drift = sin(dot(p.xz, normalize(vec2(0.63, 0.77))) * 2.25 + broad_noise * 2.2)
 		+ 0.28 * sin(dot(p.xz, normalize(vec2(-0.88, 0.47))) * 4.1 + broad_noise * 3.4);
 	float mud_ruts = sin(p.x * 7.0 + sin(p.z * 2.5) * 2.0) * 0.25;
+	float ash_ripples = sin(dot(p.xz, normalize(vec2(0.82, 0.57))) * 3.8 + broad_noise * 4.0);
+	float lava_pulse = sin(dot(p.xz, normalize(vec2(0.46, 0.89))) * 3.4 - TIME * 0.65 + broad_noise * 2.5);
 	float rock_roughness = broad_noise - 0.5;
-	VERTEX.y += surface_detail * (sand_mask * dune_wave * 0.040 + snow_mask * snow_drift * 0.022 + mud_mask * mud_ruts * 0.012 + stone_mask * rock_roughness * 0.028);
+	VERTEX.y += surface_detail * (sand_mask * dune_wave * 0.040 + snow_mask * snow_drift * 0.022 + mud_mask * mud_ruts * 0.012 + stone_mask * rock_roughness * 0.028 + ash_mask * ash_ripples * 0.009 + lava_mask * lava_pulse * 0.018);
 	world_position_v = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_normal_v = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	terrain_color_v = c;
@@ -82,9 +86,11 @@ void fragment() {
 	float snow_mask = smoothstep(0.70, 0.84, mean_color) * (1.0 - water_mask) * top_blend;
 	float sand_mask = warm * smoothstep(0.52, 0.68, mean_color) * (1.0 - snow_mask) * (1.0 - water_mask) * top_blend;
 	float stone_mask = smoothstep(0.53, 0.63, mean_color) * (1.0 - smoothstep(0.025, 0.10, abs(tint.r - tint.g))) * (1.0 - snow_mask) * (1.0 - water_mask) * top_blend;
-	float mud_mask = (1.0 - smoothstep(0.38, 0.45, mean_color)) * (1.0 - smoothstep(0.02, 0.095, abs(tint.r - tint.g))) * (1.0 - grass_mask) * (1.0 - water_mask) * top_blend;
+	float mud_mask = (1.0 - smoothstep(0.38, 0.45, mean_color)) * (1.0 - smoothstep(0.02, 0.095, abs(tint.r - tint.g))) * smoothstep(0.35, 0.40, mean_color) * (1.0 - grass_mask) * (1.0 - water_mask) * top_blend;
 	float road_mask = smoothstep(0.055, 0.15, tint.r - tint.g) * (1.0 - smoothstep(0.48, 0.56, mean_color)) * (1.0 - sand_mask) * (1.0 - water_mask) * top_blend;
 	float dirt_mask = warm * smoothstep(0.43, 0.51, mean_color) * (1.0 - sand_mask) * (1.0 - road_mask) * (1.0 - water_mask) * top_blend;
+	float ash_mask = (1.0 - smoothstep(0.28, 0.36, mean_color)) * (1.0 - water_mask) * top_blend;
+	float lava_mask = smoothstep(0.20, 0.40, tint.r - tint.g) * smoothstep(0.34, 0.48, mean_color) * (1.0 - water_mask) * top_blend;
 
 	vec3 grass = tint * mix(0.77, 1.10, broad * 0.52 + patch * 0.48);
 	float grass_speckle = smoothstep(0.71, 0.89, grain);
@@ -93,6 +99,19 @@ void fragment() {
 	float soil_mottle = mix(0.64, 1.23, medium * 0.66 + fine * 0.34);
 	float soil_grit = smoothstep(0.68, 0.91, grain);
 	vec3 dirt = tint * soil_mottle * (1.0 - soil_grit * 0.16);
+	float ash_cloud = value_noise(world_position * vec3(0.8, 0.25, 0.8) + vec3(TIME * 0.025, 0.0, -TIME * 0.018));
+	float ash_grain = value_noise(world_position * vec3(24.0, 10.0, 24.0));
+	float ash_ridge = 0.5 + 0.5 * sin(dot(world_position.xz, normalize(vec2(0.82, 0.57))) * 3.8 + (broad - 0.5) * 4.0);
+	vec3 ash_surface = mix(vec3(0.12, 0.115, 0.105), vec3(0.34, 0.315, 0.28), ash_cloud * 0.65 + ash_ridge * 0.35);
+	ash_surface *= mix(0.82, 1.12, ash_grain);
+	float ash_specks = smoothstep(0.86, 0.97, grain);
+	ash_surface += vec3(0.08, 0.075, 0.065) * ash_specks * detail;
+	float lava_flow_field = value_noise(vec3(world_position.x * 2.2 + TIME * 0.10, 1.7, world_position.z * 2.2 - TIME * 0.08));
+	float lava_phase = dot(world_position.xz, normalize(vec2(0.46, 0.89))) * 4.2 + lava_flow_field * 5.0 - TIME * 0.72;
+	float molten_channel = 1.0 - smoothstep(0.05, 0.42, abs(sin(lava_phase)));
+	float cooling_crust = smoothstep(0.60, 0.82, value_noise(world_position * vec3(3.1, 1.3, 3.1) + TIME * 0.04));
+	vec3 lava_surface = mix(vec3(0.105, 0.009, 0.002), vec3(0.92, 0.105, 0.006), molten_channel * 0.88 + lava_flow_field * 0.12);
+	lava_surface = mix(lava_surface, vec3(0.035, 0.018, 0.014), cooling_crust * (1.0 - molten_channel) * 0.72);
 	float stone_mottle = value_noise(world_position * vec3(4.8, 2.6, 4.8));
 	float stone_grit = value_noise(world_position * vec3(31.0, 18.0, 31.0));
 	float stone_fissure = smoothstep(0.87, 0.98, value_noise(world_position * vec3(17.0, 4.0, 17.0) + broad * 3.0));
@@ -137,11 +156,13 @@ void fragment() {
 	vec3 top_surface = tint * mix(0.84, 1.12, broad * 0.54 + patch * 0.46);
 	top_surface = mix(top_surface, grass, grass_mask * (0.72 + detail * 0.28));
 	top_surface = mix(top_surface, dirt, dirt_mask * (0.70 + detail * 0.30));
+	top_surface = mix(top_surface, ash_surface, ash_mask * (0.86 + detail * 0.14));
 	top_surface = mix(top_surface, stone_surface, stone_mask * (0.78 + detail * 0.22));
 	top_surface = mix(top_surface, sand, sand_mask * (0.80 + detail * 0.20));
 	top_surface = mix(top_surface, snow, snow_mask * (0.80 + detail * 0.20));
 	top_surface = mix(top_surface, mud, mud_mask * (0.80 + detail * 0.20));
 	top_surface = mix(top_surface, road, road_mask * (0.74 + detail * 0.26));
+	top_surface = mix(top_surface, lava_surface, lava_mask);
 
 	vec2 flow = normalize(water_flow_direction);
 	vec2 cross_flow = vec2(-flow.y, flow.x);
@@ -159,13 +180,16 @@ void fragment() {
 	ALBEDO = mix(exposed_rock, top_surface, top_blend);
 	ALBEDO = mix(ALBEDO, water_surface, water_mask);
 	ALBEDO = mix(ALBEDO, water_edge, shore_band * 0.45);
+	EMISSION = lava_surface * lava_mask * vec3(0.95, 0.17, 0.015);
 	ROUGHNESS = mix(mix(0.92, 0.78, puddle * mud_mask), 0.22, water_mask);
+	ROUGHNESS = mix(ROUGHNESS, mix(0.82, 0.33, molten_channel), lava_mask);
 	SPECULAR = mix(0.18 + puddle * mud_mask * 0.20, 0.58, water_mask);
+	SPECULAR = mix(SPECULAR, 0.42, lava_mask);
 
 	float bump_height = (medium - 0.5) * 0.009 + (fine - 0.5) * 0.016 + (grain - 0.5) * 0.006;
 	bump_height += (stone_mottle - 0.5) * stone_mask * 0.026 + (stone_fissure - 0.5) * stone_mask * 0.018;
-	bump_height += (stone_mottle - 0.5) * stone_mask * 0.026 + (stone_fissure - 0.5) * stone_mask * 0.018;
 	bump_height += (dunes - 0.5) * sand_mask * 0.036 + (drift - 0.5) * snow_mask * 0.024 + (rut - 0.5) * mud_mask * 0.018;
+	bump_height += (ash_ridge - 0.5) * ash_mask * 0.018 + (molten_channel - 0.5) * lava_mask * 0.022;
 	float bump_strength = (1.0 - water_mask) * top_blend * (0.70 + detail * 0.55);
 	vec3 base_normal = normalize(NORMAL);
 	vec3 dpdx = dFdx(VERTEX);

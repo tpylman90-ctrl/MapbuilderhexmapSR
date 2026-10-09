@@ -8,7 +8,7 @@ const MIN_ELEVATION: int = -15
 const HEIGHT_PER_LEVEL: float = 0.75
 const HEX_RADIUS: float = 1.0
 
-enum Terrain { GRASS, DIRT, STONE, WATER, SAND, SNOW, MUD, ROAD }
+enum Terrain { GRASS, DIRT, STONE, WATER, SAND, SNOW, MUD, ROAD, ASH, LAVA }
 
 const TERRAIN_COLORS: Array[Color] = [
 	Color("83ad55"),
@@ -18,9 +18,11 @@ const TERRAIN_COLORS: Array[Color] = [
 	Color("d0b46f"),
 	Color("d8e1e6"),
 	Color("686957"),
-	Color("886a50")
+	Color("886a50"),
+	Color("544f49"),
+	Color("ef4b13")
 ]
-const TERRAIN_NAMES: Array[String] = ["Grass", "Dirt", "Stone", "Water", "Sand", "Snow", "Mud", "Road"]
+const TERRAIN_NAMES: Array[String] = ["Grass", "Dirt", "Stone", "Water", "Sand", "Snow", "Mud", "Road", "Ash", "Lava"]
 const EDGE_AXIAL_DIRECTIONS: Array[Vector2i] = [
 	Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-1, 0),
 	Vector2i(0, -1), Vector2i(1, -1), Vector2i(1, 0)
@@ -56,7 +58,7 @@ func set_elevation(cell: Vector2i, level: int) -> void:
 
 func set_terrain(cell: Vector2i, terrain: int) -> void:
 	if contains(cell):
-		terrain_ids[index_of(cell)] = clampi(terrain, Terrain.GRASS, Terrain.ROAD)
+		terrain_ids[index_of(cell)] = clampi(terrain, Terrain.GRASS, Terrain.LAVA)
 
 func world_center(cell: Vector2i) -> Vector3:
 	var row_offset := 0.5 if cell.y % 2 == 1 else 0.0
