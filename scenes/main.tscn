@@ -1,16 +1,21 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scripts/board_preview.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/editor_controller.gd" id="1"]
 
 [node name="MapbuilderhexmapSR" type="Node3D"]
 script = ExtResource("1")
 
-[node name="Camera3D" type="Camera3D" parent="."]
-position = Vector3(0, 34, 42)
+[node name="CameraPivot" type="Node3D" parent="."]
+
+[node name="Camera3D" type="Camera3D" parent="CameraPivot"]
+position = Vector3(42, 112, 117)
 far = 600.0
 fov = 45.0
 current = true
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation = Vector3(-0.8, -0.5, 0)
-shadow_enabled = false
+shadow_enabled = true
+light_angular_distance = 2.2
+light_energy = 0.82
+light_color = Color(1, 0.93, 0.82, 1)
