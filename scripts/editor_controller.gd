@@ -1550,33 +1550,56 @@ func _create_placeable_node(kind: String) -> Node3D:
 				_add_object_mesh(root, fruit, Vector3(cos(angle) * 0.38, 0.94 + float(fruit_index % 3) * 0.18, sin(angle) * 0.38), Color("c85b35"))
 		"oak":
 			var oak_trunk := CylinderMesh.new()
-			oak_trunk.top_radius = 0.07
-			oak_trunk.bottom_radius = 0.11
-			oak_trunk.height = 0.86
-			oak_trunk.radial_segments = 6
-			_add_object_mesh(root, oak_trunk, Vector3(0.0, 0.43, 0.0), Color("765338"))
+			oak_trunk.top_radius = 0.075
+			oak_trunk.bottom_radius = 0.15
+			oak_trunk.height = 0.98
+			oak_trunk.radial_segments = 8
+			_add_object_mesh(root, oak_trunk, Vector3(0.0, 0.49, 0.0), Color("765338"))
+			var branch := CylinderMesh.new()
+			branch.top_radius = 0.035
+			branch.bottom_radius = 0.065
+			branch.height = 0.68
+			branch.radial_segments = 6
+			for branch_index in range(4):
+				var angle := TAU * float(branch_index) / 4.0 + 0.35
+				var branch_node := _add_object_mesh(root, branch, Vector3(cos(angle) * 0.24, 0.82, sin(angle) * 0.24), Color("765338"))
+				branch_node.rotation.z = cos(angle) * 0.82
+				branch_node.rotation.x = sin(angle) * 0.82
 			var crown := SphereMesh.new()
 			crown.radius = 0.43
 			crown.height = 0.78
-			crown.radial_segments = 6
-			crown.rings = 3
-			_add_object_mesh(root, crown, Vector3(0.0, 1.05, 0.0), Color("47753c"), Vector3(1.0, 0.86, 1.0))
-			_add_object_mesh(root, crown, Vector3(-0.24, 0.98, 0.08), Color("588642"), Vector3(0.70, 0.72, 0.70))
-			_add_object_mesh(root, crown, Vector3(0.23, 1.12, -0.10), Color("64934a"), Vector3(0.66, 0.68, 0.66))
+			crown.radial_segments = 8
+			crown.rings = 5
+			_add_object_mesh(root, crown, Vector3(0.0, 1.13, 0.0), Color("47753c"), Vector3(1.0, 0.86, 1.0))
+			_add_object_mesh(root, crown, Vector3(-0.31, 1.00, 0.12), Color("588642"), Vector3(0.72, 0.74, 0.76))
+			_add_object_mesh(root, crown, Vector3(0.30, 1.08, -0.14), Color("64934a"), Vector3(0.70, 0.78, 0.72))
+			_add_object_mesh(root, crown, Vector3(0.02, 1.42, 0.28), Color("54813f"), Vector3(0.74, 0.72, 0.74))
+			_add_object_mesh(root, crown, Vector3(-0.08, 1.36, -0.28), Color("6a944c"), Vector3(0.68, 0.70, 0.68))
 		"pine":
 			var pine_trunk := CylinderMesh.new()
 			pine_trunk.top_radius = 0.055
-			pine_trunk.bottom_radius = 0.09
-			pine_trunk.height = 1.48
-			pine_trunk.radial_segments = 6
-			_add_object_mesh(root, pine_trunk, Vector3(0.0, 0.74, 0.0), Color("74513a"))
-			for tier in range(3):
+			pine_trunk.bottom_radius = 0.105
+			pine_trunk.height = 1.58
+			pine_trunk.radial_segments = 8
+			_add_object_mesh(root, pine_trunk, Vector3(0.0, 0.79, 0.0), Color("74513a"))
+			for tier in range(4):
 				var cone := CylinderMesh.new()
 				cone.top_radius = 0.0
-				cone.bottom_radius = 0.43 - float(tier) * 0.055
-				cone.height = 0.78
-				cone.radial_segments = 7
-				_add_object_mesh(root, cone, Vector3(0.0, 0.64 + float(tier) * 0.34, 0.0), [Color("315f3e"), Color("3d7544"), Color("4a8248")][tier])
+				cone.bottom_radius = 0.46 - float(tier) * 0.065
+				cone.height = 0.72
+				cone.radial_segments = 9
+				_add_object_mesh(root, cone, Vector3(0.0, 0.57 + float(tier) * 0.32, 0.0), [Color("315f3e"), Color("3d7544"), Color("4a8248"), Color("5a8b4d")][tier])
+				if tier < 3:
+					var pine_branch := CylinderMesh.new()
+					pine_branch.top_radius = 0.025
+					pine_branch.bottom_radius = 0.045
+					pine_branch.height = 0.36 - float(tier) * 0.04
+					pine_branch.radial_segments = 5
+					for arm in range(3):
+						var angle := TAU * float(arm) / 3.0 + float(tier) * 0.42
+						var arm_node := _add_object_mesh(root, pine_branch, Vector3(cos(angle) * 0.17, 0.50 + float(tier) * 0.32, sin(angle) * 0.17), Color("74513a"))
+						arm_node.rotation.z = cos(angle) * 0.95
+						arm_node.rotation.x = sin(angle) * 0.95
 		"outcrop":
 			var outcrop_rock := SphereMesh.new()
 			outcrop_rock.radius = 0.60
@@ -1588,6 +1611,23 @@ func _create_placeable_node(kind: String) -> Node3D:
 			var outcrop_b := _add_object_mesh(root, outcrop_rock, Vector3(0.32, 0.32, 0.14), Color("92938b"), Vector3(0.86, 0.72, 0.82))
 			outcrop_b.rotation.z = 0.16
 			_add_object_mesh(root, outcrop_rock, Vector3(0.0, 0.64, -0.10), Color("a1a195"), Vector3(0.70, 0.84, 0.72))
+			for chip_index in range(5):
+				var chip := SphereMesh.new()
+				chip.radius = 0.22 + float(chip_index % 2) * 0.06
+				chip.height = 0.30 + float(chip_index % 3) * 0.04
+				chip.radial_segments = 6
+				chip.rings = 3
+				var angle := TAU * float(chip_index) / 5.0
+				var chip_node := _add_object_mesh(root, chip, Vector3(cos(angle) * 0.66, 0.13 + float(chip_index % 2) * 0.04, sin(angle) * 0.52), [Color("777970"), Color("888980"), Color("98988d")][chip_index % 3])
+				chip_node.rotation.y = angle
+			# Small lichen patches catch light and break up the bare gray mass.
+			for lichen_index in range(3):
+				var lichen := SphereMesh.new()
+				lichen.radius = 0.13
+				lichen.height = 0.07
+				lichen.radial_segments = 6
+				lichen.rings = 2
+				_add_object_mesh(root, lichen, Vector3(-0.22 + float(lichen_index) * 0.20, 0.48 + float(lichen_index % 2) * 0.12, 0.34), Color("71805a"), Vector3(1.0, 0.30, 0.56))
 		"haystack":
 			var hay := CylinderMesh.new()
 			hay.top_radius = 0.04
@@ -1691,9 +1731,47 @@ func _add_building_shell(root: Node3D, footprint: Vector3, wall_height: float, w
 	var roof := PrismMesh.new()
 	roof.size = Vector3(footprint.x + 0.28, maxf(0.64, footprint.y * 1.22), footprint.z + 0.32)
 	_add_object_mesh(root, roof, Vector3(0.0, wall_height + 0.22, 0.0), roof_color)
+	# Eaves, ridge cap and exposed rafter ends give the roof a built, layered silhouette.
+	var ridge := CylinderMesh.new()
+	ridge.top_radius = 0.075
+	ridge.bottom_radius = 0.075
+	ridge.height = footprint.x + 0.34
+	ridge.radial_segments = 7
+	var ridge_instance := _add_object_mesh(root, ridge, Vector3(0.0, wall_height + 0.58, 0.0), roof_color.lightened(0.16))
+	ridge_instance.rotation.z = PI * 0.5
+	for side in [-1.0, 1.0]:
+		var eave := BoxMesh.new()
+		eave.size = Vector3(footprint.x + 0.38, 0.10, 0.13)
+		_add_object_mesh(root, eave, Vector3(0.0, wall_height + 0.12, side * (footprint.z * 0.5 + 0.12)), roof_color.darkened(0.12))
+		for rafter_index in range(3):
+			var rafter := BoxMesh.new()
+			rafter.size = Vector3(0.09, 0.30, 0.10)
+			var rafter_node := _add_object_mesh(root, rafter, Vector3(-footprint.x * 0.34 + float(rafter_index) * footprint.x * 0.34, wall_height + 0.08, side * (footprint.z * 0.5 + 0.14)), wall_color.darkened(0.18))
+			rafter_node.rotation.x = side * -0.24
+	# A restrained timber frame breaks up broad wall surfaces and makes close views read as construction.
+	for x_side in [-1.0, 1.0]:
+		var corner_post := BoxMesh.new()
+		corner_post.size = Vector3(0.105, wall_height, 0.11)
+		_add_object_mesh(root, corner_post, Vector3(x_side * (footprint.x * 0.5 - 0.07), 0.16 + wall_height * 0.5, footprint.z * 0.5 + 0.018), wall_color.darkened(0.20))
+	var facade_beam := BoxMesh.new()
+	facade_beam.size = Vector3(footprint.x, 0.10, 0.10)
+	_add_object_mesh(root, facade_beam, Vector3(0.0, 0.16 + wall_height * 0.28, footprint.z * 0.5 + 0.02), wall_color.darkened(0.14))
 	var door := BoxMesh.new()
-	door.size = Vector3(0.28, wall_height * 0.73, 0.07)
+	door.size = Vector3(0.30, wall_height * 0.73, 0.07)
 	_add_object_mesh(root, door, Vector3(0.0, 0.16 + door.size.y * 0.5, footprint.z * 0.5 + 0.045), door_color)
+	for plank_index in [-1.0, 1.0]:
+		var plank := BoxMesh.new()
+		plank.size = Vector3(0.018, door.size.y * 0.88, 0.018)
+		_add_object_mesh(root, plank, Vector3(plank_index * 0.075, 0.16 + door.size.y * 0.5, footprint.z * 0.5 + 0.087), door_color.lightened(0.12))
+	var handle := SphereMesh.new()
+	handle.radius = 0.035
+	handle.height = 0.07
+	handle.radial_segments = 6
+	handle.rings = 3
+	_add_object_mesh(root, handle, Vector3(0.09, 0.16 + door.size.y * 0.52, footprint.z * 0.5 + 0.10), Color("b89a58"))
+	var doorstep := BoxMesh.new()
+	doorstep.size = Vector3(0.48, 0.09, 0.20)
+	_add_object_mesh(root, doorstep, Vector3(0.0, 0.05, footprint.z * 0.5 + 0.13), wall_color.lightened(0.10))
 	var window_y := 0.16 + wall_height * 0.64
 	var window_z := footprint.z * 0.5 + 0.045
 	_add_building_window(root, Vector3(-footprint.x * 0.28, window_y, window_z), 0.19)
@@ -1712,6 +1790,16 @@ func _add_building_window(root: Node3D, position: Vector3, width: float) -> void
 	var mullion := BoxMesh.new()
 	mullion.size = Vector3(0.035, 0.24, 0.04)
 	_add_object_mesh(root, mullion, position + Vector3(0.0, 0.0, 0.068), Color("594536"))
+	var crossbar := BoxMesh.new()
+	crossbar.size = Vector3(width, 0.035, 0.04)
+	_add_object_mesh(root, crossbar, position + Vector3(0.0, 0.0, 0.068), Color("594536"))
+	var sill := BoxMesh.new()
+	sill.size = Vector3(width + 0.18, 0.07, 0.13)
+	_add_object_mesh(root, sill, position + Vector3(0.0, -0.20, 0.035), Color("756047"))
+	for side in [-1.0, 1.0]:
+		var shutter := BoxMesh.new()
+		shutter.size = Vector3(0.09, 0.28, 0.055)
+		_add_object_mesh(root, shutter, position + Vector3(side * (width * 0.5 + 0.07), 0.0, 0.045), Color("594536"))
 
 func _add_building_chimney(root: Node3D, position: Vector3) -> void:
 	var chimney := CylinderMesh.new()
@@ -1798,14 +1886,27 @@ func _add_object_mesh(parent: Node3D, mesh: Mesh, local_position: Vector3, color
 		castle_material.set_shader_parameter("masonry", parent.name == "PlacedAshenreachCitadel" or (color.r > 0.40 and color.g > 0.40 and color.b > 0.36))
 		instance.material_override = castle_material
 	else:
-		var standard_material := StandardMaterial3D.new()
-		standard_material.albedo_color = color
-		standard_material.roughness = 0.92
-		standard_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-		instance.material_override = standard_material
+		var prop_material := ShaderMaterial.new()
+		prop_material.shader = load("res://assets/materials/prop_surface.gdshader") as Shader
+		prop_material.set_shader_parameter("base_color", color)
+		prop_material.set_shader_parameter("surface_style", _prop_surface_style(color))
+		prop_material.set_shader_parameter("detail_strength", 0.82)
+		instance.material_override = prop_material
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	parent.add_child(instance)
 	return instance
+
+func _prop_surface_style(color: Color) -> int:
+	var brightness := (color.r + color.g + color.b) / 3.0
+	if color.g > color.r * 1.08 and color.g > color.b * 1.10:
+		return 2 # foliage
+	if color.r > color.b * 1.45 and color.r > color.g * 0.98 and brightness < 0.47:
+		return 3 # dark fired roof tile
+	if color.b > color.r * 1.10 and color.b > color.g * 0.96 and brightness < 0.62:
+		return 4 # metal, glass, or dark fittings
+	if color.r > color.b * 1.25 and color.g > color.b * 1.18:
+		return 1 # timber
+	return 0 # stone
 
 func _object_footprint_radius(kind: String) -> int:
 	match kind:
