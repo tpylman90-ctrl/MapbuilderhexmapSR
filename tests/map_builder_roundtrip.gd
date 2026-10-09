@@ -180,9 +180,23 @@ func _run() -> void:
 	if not loaded_types.has("ashen_keep") or not loaded_types.has("lava_vent"):
 		_fail("Ashenreach map round-trip did not restore volcanic objects")
 		return
+	var region_noise := FastNoiseLite.new()
+	region_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	region_noise.frequency = 0.21
+	var territory_presets: Array[String] = ["ravenwood", "blighted_marsh", "cursed_mire", "shadowfen", "frostpeaks", "drakeshard", "iron_plains", "veiled_sea", "ember_coast", "stormcrown"]
+	for territory in territory_presets:
+		var landmark: Vector2i = editor.call("_territory_landmark_cell", territory)
+		var profile: Dictionary = editor.call("_territory_landscape", territory, landmark, 0.13, region_noise)
+		var profile_terrain := int(profile.get("terrain", -1))
+		if profile.is_empty() or profile_terrain < HexGrid.Terrain.GRASS or profile_terrain > HexGrid.Terrain.LAVA:
+			_fail("Territory terrain profile failed for %s" % territory)
+			return
+		if str(editor.call("_generation_preset_title", territory)).is_empty():
+			_fail("Territory preset is missing its display name: %s" % territory)
+			return
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_PATH))
-	print("Map builder round-trip, object history, named markers, and island generation passed.")
+	print("Map builder round-trip, object history, all territory profiles, Ashenreach generation, and save/load passed.")
 	quit(0)
 
 func _fail(message: String) -> void:
