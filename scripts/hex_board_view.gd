@@ -31,8 +31,6 @@ var cliff_node: MeshInstance3D
 var selection_node: MeshInstance3D
 var selected_cell := Vector2i(-1, -1)
 var corner_cells: Dictionary = {}
-var corner_height_cache: Dictionary = {}
-var corner_color_cache: Dictionary = {}
 var displayed_elevations := PackedInt32Array()
 var _surface_update_queued := false
 var _surface_heights_dirty := false
@@ -110,11 +108,13 @@ func _build_tile_mesh() -> void:
 	terrain_shader_material = ShaderMaterial.new()
 	terrain_shader_material.shader = load("res://assets/materials/terrain_surface.gdshader") as Shader
 	terrain_shader_material.set_shader_parameter("surface_detail", surface_detail_strength)
+	terrain_shader_material.set_shader_parameter("water_flow_direction", water_flow_direction)
 	grid_node.material_override = terrain_shader_material
 	add_child(grid_node)
 
 	outline_node = MeshInstance3D.new()
 	outline_node.name = "HexGridLinesOnTerrain"
+	outline_node.visible = false
 	var outline_material := StandardMaterial3D.new()
 	outline_material.albedo_color = Color("536649")
 	outline_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -126,100 +126,145 @@ func _build_tile_mesh() -> void:
 	_build_water_instances()
 	_build_shoreline_node()
 
-func _corner_world_position(cell: Vector2i, corner: int) -> Vector3:
-	var center := data.world_center(cell)
-	var angle := deg_to_rad(30.0 + 60.0 * corner)
-	var x := center.x + cos(angle) * EDGE_RADIUS
-	var z := center.z + sin(angle) * EDGE_RADIUS
-	return Vector3(roundf(x * 10000.0) / 10000.0, 0.0, roundf(z * 10000.0) / 10000.0)
-
-func _corner_key(cell: Vector2i, corner: int) -> Vector2i:
-	var point := _corner_world_position(cell, corner)
-	return Vector2i(roundi(point.x * 10000.0), roundi(point.z * 10000.0))
-
-func _rebuild_corner_height_cache() -> void:
-	corner_cells.clear()
-	corner_height_cache.clear()
-	corner_color_cache.clear()
-	for row in range(HexGrid.ROWS):
-		for column in range(HexGrid.COLUMNS):
-			var cell := Vector2i(column, row)
-			for corner in range(6):
-				var key := _corner_key(cell, corner)
-				if not corner_cells.has(key):
-					corner_cells[key] = []
-				corner_cells[key].append(cell)
-	for key in corner_cells:
-		var members: Array = corner_cells[key]
-		var height_sum := 0.0
-		var color_sum := Color(0.0, 0.0, 0.0, 0.0)
-		for member in members:
-			height_sum += float(data.elevation_at(member)) * STEP_HEIGHT + CAP_HEIGHT * 0.5
-			color_sum += HexGrid.TERRAIN_COLORS[data.terrain_at(member)]
-		var count := float(members.size())
-		corner_height_cache[key] = height_sum / count
-		corner_color_cache[key] = Color(color_sum.r / count, color_sum.g / count, color_sum.b / count, 1.0)
-
-func _cell_corner_has_cliff(cell: Vector2i, corner: int) -> bool:
-	var level := data.elevation_at(cell)
-	for edge in [(corner + 5) % 6, corner]:
-		var neighbor := data.neighbor_for_edge(cell, edge)
-		if data.contains(neighbor) and absi(data.elevation_at(neighbor) - level) >= 2:
-			return true
-	return false
-
-func _cell_corner_height(cell: Vector2i, corner: int) -> float:
-	var level := data.elevation_at(cell)
-	if _cell_corner_has_cliff(cell, corner):
-		return float(level) * STEP_HEIGHT + CAP_HEIGHT * 0.5
-	return float(corner_height_cache.get(_corner_key(cell, corner), float(level) * STEP_HEIGHT + CAP_HEIGHT * 0.5))
-
-func _cell_corner_color(cell: Vector2i, corner: int) -> Color:
-	if _cell_corner_has_cliff(cell, corner):
-		return HexGrid.TERRAIN_COLORS[data.terrain_at(cell)]
-	return corner_color_cache.get(_corner_key(cell, corner), HexGrid.TERRAIN_COLORS[data.terrain_at(cell)])
-
 func _add_terrain_vertex(surface: SurfaceTool, point: Vector3, color: Color) -> void:
 	surface.set_color(color)
 	surface.set_uv(Vector2(point.x, point.z) * 0.5)
 	surface.add_vertex(point)
 
+func _sample_base_cell(world_x: float, world_z: float) -> Vector2i:
+	var cell := data.world_to_cell(world_x, world_z)
+	if data.contains(cell):
+		return cell
+	var approximate_row := clampi(roundi(world_z / 1.5 + (HexGrid.ROWS - 1) * 0.5), 0, HexGrid.ROWS - 1)
+	var best_cell := Vector2i.ZERO
+	var best_distance := INF
+	for row in range(maxi(0, approximate_row - 2), mini(HexGrid.ROWS, approximate_row + 3)):
+		var row_offset := 0.5 if row % 2 == 1 else 0.0
+		var approximate_column := roundi(world_x / sqrt(3.0) + (HexGrid.COLUMNS - 1) * 0.5 + 0.25 - row_offset)
+		for column in range(maxi(0, approximate_column - 2), mini(HexGrid.COLUMNS, approximate_column + 3)):
+			var candidate := Vector2i(column, row)
+			var center := data.world_center(candidate)
+			var distance := Vector2(world_x - center.x, world_z - center.z).length_squared()
+			if distance < best_distance:
+				best_distance = distance
+				best_cell = candidate
+	return best_cell
+
+func _sample_terrain(world_x: float, world_z: float) -> Vector4:
+	var base := _sample_base_cell(world_x, world_z)
+	var axial := data.axial_coordinates(base)
+	var sample_position := Vector2(world_x, world_z)
+	var support_radius := 2.55
+	var height_sum := 0.0
+	var color_r := 0.0
+	var color_g := 0.0
+	var color_b := 0.0
+	var total_weight := 0.0
+	for dq in range(-2, 3):
+		for dr in range(-2, 3):
+			if maxi(absi(dq), maxi(absi(dr), absi(dq + dr))) > 2:
+				continue
+			var row := axial.y + dr
+			var column := axial.x + dq + floori(float(row) * 0.5)
+			var cell := Vector2i(column, row)
+			if not data.contains(cell):
+				continue
+			var center := data.world_center(cell)
+			var distance := sample_position.distance_to(Vector2(center.x, center.z))
+			if distance >= support_radius:
+				continue
+			var falloff := 1.0 - (distance * distance) / (support_radius * support_radius)
+			var weight := falloff * falloff * falloff
+			var terrain := data.terrain_at(cell)
+			var elevation := float(data.elevation_at(cell)) * STEP_HEIGHT + CAP_HEIGHT * 0.5
+			if terrain == HexGrid.Terrain.WATER:
+				elevation = CAP_HEIGHT * 0.5
+			var tint: Color = HexGrid.TERRAIN_COLORS[terrain]
+			height_sum += elevation * weight
+			color_r += tint.r * weight
+			color_g += tint.g * weight
+			color_b += tint.b * weight
+			total_weight += weight
+	if total_weight <= 0.0001:
+		var fallback := data.terrain_at(base)
+		var tint: Color = HexGrid.TERRAIN_COLORS[fallback]
+		return Vector4(float(data.elevation_at(base)) * STEP_HEIGHT + CAP_HEIGHT * 0.5, tint.r, tint.g, tint.b)
+	return Vector4(height_sum / total_weight, color_r / total_weight, color_g / total_weight, color_b / total_weight)
+
+func _add_sampled_terrain_vertex(surface: SurfaceTool, world_x: float, world_z: float, sample: Vector4) -> void:
+	var point := Vector3(world_x, sample.x, world_z)
+	_add_terrain_vertex(surface, point, Color(sample.y, sample.z, sample.w, 1.0))
+
 func _rebuild_terrain_surface() -> void:
 	if grid_node == null:
 		return
-	var surface := SurfaceTool.new()
-	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var minimum_x := INF
+	var maximum_x := -INF
+	var minimum_z := INF
+	var maximum_z := -INF
 	for row in range(HexGrid.ROWS):
 		for column in range(HexGrid.COLUMNS):
-			var cell := Vector2i(column, row)
-			var center := data.world_center(cell)
-			center.y = float(data.elevation_at(cell)) * STEP_HEIGHT + CAP_HEIGHT * 0.5
-			var center_color := HexGrid.TERRAIN_COLORS[data.terrain_at(cell)]
-			for corner in range(6):
-				var a := _corner_world_position(cell, corner)
-				var b := _corner_world_position(cell, (corner + 1) % 6)
-				a.y = _cell_corner_height(cell, corner)
-				b.y = _cell_corner_height(cell, (corner + 1) % 6)
-				_add_terrain_vertex(surface, center, center_color)
-				_add_terrain_vertex(surface, b, _cell_corner_color(cell, (corner + 1) % 6))
-				_add_terrain_vertex(surface, a, _cell_corner_color(cell, corner))
+			var center := data.world_center(Vector2i(column, row))
+			minimum_x = minf(minimum_x, center.x)
+			maximum_x = maxf(maximum_x, center.x)
+			minimum_z = minf(minimum_z, center.z)
+			maximum_z = maxf(maximum_z, center.z)
+	var spacing := 0.5
+	minimum_x -= 0.65
+	maximum_x += 0.65
+	minimum_z -= 0.65
+	maximum_z += 0.65
+	var x_steps := ceili((maximum_x - minimum_x) / spacing) + 1
+	var z_steps := ceili((maximum_z - minimum_z) / spacing) + 1
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var row_a := PackedVector4Array()
+	for x_index in range(x_steps):
+		row_a.append(_sample_terrain(minimum_x + float(x_index) * spacing, minimum_z))
+	for z_index in range(z_steps - 1):
+		var z_a := minimum_z + float(z_index) * spacing
+		var z_b := z_a + spacing
+		var row_b := PackedVector4Array()
+		for x_index in range(x_steps):
+			row_b.append(_sample_terrain(minimum_x + float(x_index) * spacing, z_b))
+		for x_index in range(x_steps - 1):
+			var x_a := minimum_x + float(x_index) * spacing
+			var x_b := x_a + spacing
+			_add_sampled_terrain_vertex(surface, x_a, z_a, row_a[x_index])
+			_add_sampled_terrain_vertex(surface, x_a, z_b, row_b[x_index])
+			_add_sampled_terrain_vertex(surface, x_b, z_a, row_a[x_index + 1])
+			_add_sampled_terrain_vertex(surface, x_b, z_a, row_a[x_index + 1])
+			_add_sampled_terrain_vertex(surface, x_a, z_b, row_b[x_index])
+			_add_sampled_terrain_vertex(surface, x_b, z_b, row_b[x_index + 1])
+		row_a = row_b
 	surface.index()
 	surface.generate_normals()
 	grid_node.mesh = surface.commit()
 
-func _rebuild_grid_outlines() -> void:
+func set_hex_overlay_visible(enabled: bool) -> void:
 	if outline_node == null:
+		return
+	outline_node.visible = enabled
+	if enabled:
+		_rebuild_grid_outlines()
+
+func _rebuild_grid_outlines() -> void:
+	if outline_node == null or not outline_node.visible:
 		return
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_LINES)
 	for row in range(HexGrid.ROWS):
 		for column in range(HexGrid.COLUMNS):
 			var cell := Vector2i(column, row)
+			var center := data.world_center(cell)
 			for corner in range(6):
-				var a := _corner_world_position(cell, corner)
-				var b := _corner_world_position(cell, (corner + 1) % 6)
-				a.y = _cell_corner_height(cell, corner) + 0.012
-				b.y = _cell_corner_height(cell, (corner + 1) % 6) + 0.012
+				var next_corner := (corner + 1) % 6
+				var angle_a := deg_to_rad(30.0 + 60.0 * corner)
+				var angle_b := deg_to_rad(30.0 + 60.0 * next_corner)
+				var a := Vector3(center.x + cos(angle_a) * EDGE_RADIUS, 0.0, center.z + sin(angle_a) * EDGE_RADIUS)
+				var b := Vector3(center.x + cos(angle_b) * EDGE_RADIUS, 0.0, center.z + sin(angle_b) * EDGE_RADIUS)
+				a.y = _surface_height_at(a.x, a.z) + 0.018
+				b.y = _surface_height_at(b.x, b.z) + 0.018
 				surface.add_vertex(a)
 				surface.add_vertex(b)
 	outline_node.mesh = surface.commit()
@@ -240,7 +285,6 @@ func _flush_terrain_surface_update() -> void:
 	_surface_update_queued = false
 	if _refreshing_all:
 		return
-	_rebuild_corner_height_cache()
 	_rebuild_terrain_surface()
 	_rebuild_grid_outlines()
 	if _surface_heights_dirty:
@@ -267,6 +311,7 @@ func _build_water_instances() -> void:
 	water_shader_material.shader = load("res://assets/materials/water_surface.gdshader") as Shader
 	water_shader_material.set_shader_parameter("flow_direction", water_flow_direction)
 	water_node.material_override = water_shader_material
+	water_node.visible = false
 	add_child(water_node)
 
 func _refresh_water_cell(cell: Vector2i, index: int, center: Vector3) -> void:
@@ -293,6 +338,8 @@ func set_water_flow_direction(direction: Vector2) -> void:
 	water_flow_direction = direction.normalized()
 	if water_shader_material != null:
 		water_shader_material.set_shader_parameter("flow_direction", water_flow_direction)
+	if terrain_shader_material != null:
+		terrain_shader_material.set_shader_parameter("water_flow_direction", water_flow_direction)
 	if shoreline_shader_material != null:
 		shoreline_shader_material.set_shader_parameter("flow_direction", water_flow_direction)
 
@@ -303,6 +350,7 @@ func _build_shoreline_node() -> void:
 	shoreline_shader_material.shader = load("res://assets/materials/water_shoreline.gdshader") as Shader
 	shoreline_shader_material.set_shader_parameter("flow_direction", water_flow_direction)
 	shoreline_node.material_override = shoreline_shader_material
+	shoreline_node.visible = false
 	add_child(shoreline_node)
 
 func _refresh_shorelines_around(cell: Vector2i) -> void:
@@ -471,28 +519,7 @@ func _add_colored_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vect
 		surface.add_vertex(vertex[0])
 
 func _surface_height_at(world_x: float, world_z: float) -> float:
-	var cell := data.world_to_cell(world_x, world_z)
-	if not data.contains(cell):
-		return 0.0
-	var center := data.world_center(cell)
-	center.y = float(data.elevation_at(cell)) * STEP_HEIGHT + CAP_HEIGHT * 0.5
-	var sample := Vector2(world_x, world_z)
-	for corner in range(6):
-		var a := _corner_world_position(cell, corner)
-		var b := _corner_world_position(cell, (corner + 1) % 6)
-		a.y = _cell_corner_height(cell, corner)
-		b.y = _cell_corner_height(cell, (corner + 1) % 6)
-		var v0 := Vector2(a.x - center.x, a.z - center.z)
-		var v1 := Vector2(b.x - center.x, b.z - center.z)
-		var v2 := sample - Vector2(center.x, center.z)
-		var denominator := v0.x * v1.y - v1.x * v0.y
-		if absf(denominator) < 0.00001:
-			continue
-		var weight_a := (v2.x * v1.y - v1.x * v2.y) / denominator
-		var weight_b := (v0.x * v2.y - v2.x * v0.y) / denominator
-		if weight_a >= -0.001 and weight_b >= -0.001 and weight_a + weight_b <= 1.001:
-			return center.y * (1.0 - weight_a - weight_b) + a.y * weight_a + b.y * weight_b
-	return center.y
+	return _sample_terrain(world_x, world_z).x
 
 func _refresh_grass_cell(cell: Vector2i, index: int) -> void:
 	var is_grass := data.terrain_at(cell) == HexGrid.Terrain.GRASS
@@ -534,7 +561,6 @@ func refresh_all() -> void:
 	_surface_heights_dirty = false
 	_surface_dirty_cells.clear()
 	shoreline_edges.clear()
-	_rebuild_corner_height_cache()
 	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
 		refresh_cell(data.cell_from_index(index))
 	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
@@ -578,189 +604,23 @@ func _update_selection() -> void:
 func _make_selection_outline_mesh(cell: Vector2i) -> ArrayMesh:
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_LINE_STRIP)
-	var center_y := float(data.elevation_at(cell)) * STEP_HEIGHT + CAP_HEIGHT * 0.5
+	var center := data.world_center(cell)
+	var center_y := _surface_height_at(center.x, center.z)
 	for corner in range(7):
 		var corner_index := corner % 6
 		var angle := deg_to_rad(30.0 + 60.0 * corner_index)
-		var corner_y := _cell_corner_height(cell, corner_index)
-		surface.add_vertex(Vector3(cos(angle) * 1.01, corner_y - center_y + 0.02, sin(angle) * 1.01))
+		var local_x := cos(angle) * 1.01
+		var local_z := sin(angle) * 1.01
+		var corner_y := _surface_height_at(center.x + local_x, center.z + local_z)
+		surface.add_vertex(Vector3(local_x, corner_y - center_y + 0.025, local_z))
 	return surface.commit()
 
 func _rebuild_cliffs() -> void:
+	# Rock faces come from the square heightfield's slope shading.
 	if cliff_node != null:
 		cliff_node.queue_free()
 		cliff_node = null
 	cliff_shader_material = null
-	var surface := SurfaceTool.new()
-	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var cliff_count := 0
-	for row in range(HexGrid.ROWS):
-		for column in range(HexGrid.COLUMNS):
-			var cell := Vector2i(column, row)
-			var cell_level := data.elevation_at(cell)
-			# Emit only high-to-low boundary edges into this shared surface. Equal- or
-			# higher-level neighbors omit their shared edge, leaving no interior walls.
-			for edge in range(6):
-				var neighbor := data.neighbor_for_edge(cell, edge)
-				var high_level: int
-				var low_level: int
-				if data.contains(neighbor):
-					var neighbor_level := data.elevation_at(neighbor)
-					if cell_level - neighbor_level < 2:
-						continue
-					high_level = cell_level
-					low_level = neighbor_level
-				else:
-					if cell_level == 0:
-						continue
-					high_level = maxi(cell_level, 0)
-					low_level = mini(cell_level, 0)
-				_append_organic_cliff_face(surface, cell, edge, low_level, high_level)
-				cliff_count += 1
-	if cliff_count == 0:
-		return
-	# Keep the triangulated rock planes flat shaded for a hand-cut low-poly look.
-	surface.generate_normals()
-	cliff_node = MeshInstance3D.new()
-	cliff_node.name = "AutoCliffFaces"
-	cliff_node.mesh = surface.commit()
-	cliff_shader_material = ShaderMaterial.new()
-	cliff_shader_material.shader = load("res://assets/materials/cliff_rock_texture.gdshader") as Shader
-	cliff_shader_material.set_shader_parameter("rock_detail", cliff_detail_strength)
-	cliff_node.material_override = cliff_shader_material
-	add_child(cliff_node)
-
-
-func _append_organic_cliff_face(surface: SurfaceTool, cell: Vector2i, edge: int, low_level: int, high_level: int) -> void:
-	var center := data.world_center(cell)
-	var angle_a := deg_to_rad(30.0 + 60.0 * edge)
-	var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
-	var edge_a := Vector3(center.x + cos(angle_a) * EDGE_RADIUS, 0.0, center.z + sin(angle_a) * EDGE_RADIUS)
-	var edge_b := Vector3(center.x + cos(angle_b) * EDGE_RADIUS, 0.0, center.z + sin(angle_b) * EDGE_RADIUS)
-	var middle_angle := deg_to_rad(60.0 + 60.0 * edge)
-	var outward := Vector3(cos(middle_angle), 0.0, sin(middle_angle))
-	var tangent := (edge_b - edge_a).normalized()
-	var bottom_y := low_level * STEP_HEIGHT + CAP_HEIGHT * 0.5
-	var top_y := high_level * STEP_HEIGHT + CAP_HEIGHT * 0.5
-	var wall_height := top_y - bottom_y
-	var edge_length := edge_a.distance_to(edge_b)
-	cliff_blend_top_y = top_y
-	cliff_blend_color = HexGrid.TERRAIN_COLORS[data.terrain_at(cell)].lightened(0.14)
-
-	# A continuous noisy surface replaces the old pair of vertical buttress strips.
-	# Shared top, bottom, and corner rows stay fixed so neighboring boundary faces meet.
-	_append_cliff_backing_grid(surface, edge_a, edge_b, bottom_y, top_y, center, outward, tangent)
-
-	var rng := RandomNumberGenerator.new()
-	rng.seed = int(cell.x * 73856093) ^ int(cell.y * 19349663) ^ int(edge * 83492791)
-	# Sparse cracks and moss add scale cues without rebuilding the face as columns.
-	var moss_colors: Array[Color] = [Color("4d6038"), Color("687748"), Color("78834d")]
-	var moss_count := clampi(ceili(edge_length * wall_height / 2.3), 2, 4)
-	for moss_index in range(moss_count):
-		var moss_t := rng.randf_range(0.14, 0.86)
-		var moss_width := rng.randf_range(0.055, 0.12)
-		var moss_y := top_y - rng.randf_range(0.04, minf(0.24, wall_height * 0.34))
-		var moss_a := edge_a.lerp(edge_b, moss_t - moss_width) + outward * 0.16
-		var moss_b := edge_a.lerp(edge_b, moss_t + moss_width) + outward * 0.16
-		var moss_tip := edge_a.lerp(edge_b, moss_t + rng.randf_range(-0.025, 0.025)) + outward * 0.18
-		moss_a.y = moss_y
-		moss_b.y = moss_y + rng.randf_range(-0.03, 0.03)
-		moss_tip.y = minf(top_y + 0.02, moss_y + rng.randf_range(0.06, 0.14))
-		_add_side_triangle(surface, moss_a, moss_b, moss_tip, moss_colors[rng.randi_range(0, moss_colors.size() - 1)])
-
-	var fissure_count := clampi(ceili(wall_height / 2.6), 2, 4)
-	for fissure in range(fissure_count):
-		var t_center := rng.randf_range(0.15, 0.85)
-		var crack_length := minf(rng.randf_range(0.7, 1.5), wall_height * 0.78)
-		var crack_bottom := rng.randf_range(bottom_y, maxf(bottom_y, top_y - crack_length))
-		var crack_top := crack_bottom + crack_length
-		var drift := rng.randf_range(-0.18, 0.18)
-		var crack_width := rng.randf_range(0.016, 0.034)
-		var depth := outward * 0.19
-		var left_bottom := edge_a.lerp(edge_b, t_center - crack_width) + depth
-		var right_bottom := edge_a.lerp(edge_b, t_center + crack_width) + depth
-		var left_top := edge_a.lerp(edge_b, t_center + drift - crack_width * 0.3) + depth
-		var right_top := edge_a.lerp(edge_b, t_center + drift + crack_width * 0.3) + depth
-		left_bottom.y = crack_bottom
-		right_bottom.y = crack_bottom
-		left_top.y = crack_top
-		right_top.y = crack_top
-		_add_side_triangle(surface, left_bottom, right_bottom, left_top, Color("30312c"))
-		_add_side_triangle(surface, right_bottom, right_top, left_top, Color("282923"))
-
-
-func _append_cliff_backing_grid(surface: SurfaceTool, edge_a: Vector3, edge_b: Vector3, bottom_y: float, top_y: float, center: Vector3, outward: Vector3, tangent: Vector3) -> void:
-	var horizontal_segments := 12
-	var vertical_segments := clampi(ceili((top_y - bottom_y) / 0.25), 10, 20)
-	var rows: Array = []
-	for y_step in range(vertical_segments + 1):
-		var height_ratio := float(y_step) / vertical_segments
-		var row := PackedVector3Array()
-		for x_step in range(horizontal_segments + 1):
-			var edge_ratio := float(x_step) / horizontal_segments
-			var point := edge_a.lerp(edge_b, edge_ratio)
-			point.y = lerpf(bottom_y, top_y, height_ratio)
-			if y_step > 0 and y_step < vertical_segments and x_step > 0 and x_step < horizontal_segments:
-				var mass_profile := lerpf(0.48, 1.0, pow(maxf(sin(PI * height_ratio), 0.0), 0.72))
-				var shoulder_fade := maxf(pow(maxf(sin(PI * height_ratio), 0.0), 0.72), 0.42)
-				var side_fade := clampf(minf(edge_ratio, 1.0 - edge_ratio) * 3.0, 0.0, 1.0)
-				var displacement_fade := mass_profile * shoulder_fade * side_fade
-				point += _cliff_vertex_breakup(point, center, outward, tangent, displacement_fade)
-			row.append(point)
-		rows.append(row)
-
-	for y_step in range(vertical_segments):
-		var lower: PackedVector3Array = rows[y_step]
-		var upper: PackedVector3Array = rows[y_step + 1]
-		for x_step in range(horizontal_segments):
-			var low_left: Vector3 = lower[x_step]
-			var low_right: Vector3 = lower[x_step + 1]
-			var high_left: Vector3 = upper[x_step]
-			var high_right: Vector3 = upper[x_step + 1]
-			# Alternate diagonals to avoid the repeated triangular strip pattern.
-			if (x_step + y_step) % 2 == 0:
-				_add_organic_triangle(surface, low_left, high_left, high_right)
-				_add_organic_triangle(surface, low_left, high_right, low_right)
-			else:
-				_add_organic_triangle(surface, low_left, high_left, low_right)
-				_add_organic_triangle(surface, low_right, high_left, high_right)
-
-func _cliff_vertex_breakup(point: Vector3, center: Vector3, outward: Vector3, tangent: Vector3, fade: float) -> Vector3:
-	# Broad cellular forms create bulges; smaller noise shifts them sideways and vertically.
-	var broad := cliff_noise.get_noise_3d(point.x * 1.5, point.y * 0.8, point.z * 1.5)
-	var detail := cliff_noise.get_noise_3d((point.x + 17.3) * 3.2, (point.y - 4.1) * 2.2, (point.z + 9.7) * 3.2)
-	var chips := cliff_noise.get_noise_3d((point.x - 8.1) * 7.5, (point.y + 2.7) * 5.4, (point.z + 13.6) * 7.5)
-	return (outward * (broad * 0.48 + detail * 0.28 + chips * 0.075) + tangent * (detail * 0.22 + chips * 0.10) + Vector3.UP * (broad * 0.12 + chips * 0.055)) * fade
-
-func _add_organic_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
-	var centroid := (a + b + c) / 3.0
-	var facet_noise := cliff_noise.get_noise_3d((centroid.x + 31.0) * 2.1, (centroid.y - 6.0) * 2.3, (centroid.z - 11.0) * 2.1)
-	var facet_step := roundf(clampf(0.5 + facet_noise * 0.52, 0.0, 1.0) * 5.0) / 5.0
-	var facet_color := Color("57452f").lerp(Color("b49a6c"), facet_step)
-	for point in [a, b, c]:
-		var fleck := cliff_noise.get_noise_3d((point.x + 4.7) * 8.0, (point.y + 1.9) * 6.0, (point.z - 7.3) * 8.0)
-		var stone_color := facet_color.lerp(Color("c1a578"), clampf(0.08 + fleck * 0.08, 0.0, 0.16))
-		var edge_wobble := sin(point.x * 5.7 + point.z * 4.1) * 0.055
-		var blend_depth := maxf(0.24, 0.36 + edge_wobble)
-		var blend_t := clampf((cliff_blend_top_y - point.y) / blend_depth, 0.0, 1.0)
-		blend_t = blend_t * blend_t * (3.0 - 2.0 * blend_t)
-		var vertex_color := stone_color.lerp(cliff_blend_color, (1.0 - blend_t) * 0.84)
-		surface.set_smooth_group(-1)
-		surface.set_color(vertex_color)
-		surface.set_uv(Vector2((point.x + point.z) * 0.65, point.y * 0.55))
-		surface.add_vertex(point)
-
-func _add_side_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color) -> void:
-	for point in [a, b, c]:
-		var edge_wobble := sin(point.x * 5.7 + point.z * 4.1) * 0.055
-		var blend_depth := maxf(0.24, 0.36 + edge_wobble)
-		var blend_t := clampf((cliff_blend_top_y - point.y) / blend_depth, 0.0, 1.0)
-		blend_t = blend_t * blend_t * (3.0 - 2.0 * blend_t)
-		var vertex_color := color.lerp(cliff_blend_color, (1.0 - blend_t) * 0.84)
-		surface.set_smooth_group(-1)
-		surface.set_color(vertex_color)
-		surface.set_uv(Vector2((point.x + point.z) * 0.65, point.y * 0.55))
-		surface.add_vertex(point)
 
 func set_surface_detail(value: float) -> void:
 	surface_detail_strength = clampf(value, 0.0, 1.0)
@@ -769,8 +629,6 @@ func set_surface_detail(value: float) -> void:
 
 func set_cliff_detail(value: float) -> void:
 	cliff_detail_strength = clampf(value, 0.0, 1.0)
-	if cliff_shader_material != null:
-		cliff_shader_material.set_shader_parameter("rock_detail", cliff_detail_strength)
 
 func refresh_cliffs() -> void:
 	_rebuild_cliffs()

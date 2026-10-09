@@ -313,10 +313,9 @@ func _build_editor_ui() -> void:
 	_add_section_title(map_page, "DISPLAY")
 	var grid_toggle := CheckButton.new()
 	grid_toggle.text = "Hex outlines"
-	grid_toggle.button_pressed = true
+	grid_toggle.button_pressed = false
 	grid_toggle.toggled.connect(func(enabled: bool):
-		if _outline_node != null:
-			_outline_node.visible = enabled
+		board_view.set_hex_overlay_visible(enabled)
 	)
 	map_page.add_child(grid_toggle)
 	var grass_toggle := CheckButton.new()

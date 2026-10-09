@@ -8,6 +8,7 @@ uniform vec3 water_edge : source_color = vec3(0.34, 0.68, 0.64);
 uniform float surface_detail : hint_range(0.0, 1.0) = 0.88;
 uniform float slope_threshold : hint_range(0.0, 1.0) = 0.68;
 uniform float blend_sharpness : hint_range(0.0, 0.2) = 0.06;
+uniform vec2 water_flow_direction = vec2(0.707107, 0.707107);
 
 float hash3(vec3 p) {
 	p = fract(p * 0.1031);
@@ -75,16 +76,23 @@ void fragment() {
 	top_surface = mix(top_surface, sand_surface, sand_mask * (0.50 + detail * 0.50));
 	vec3 exposed_rock = cliff_color * mix(0.78, 1.12, broad * 0.65 + medium * 0.35);
 
-	// Intersecting wave trains create motion in multiple directions.
-	float wave_a = sin(world_position.x * 2.2 + world_position.z * 1.4 + TIME * 1.2);
-	float wave_b = sin(world_position.z * 2.8 - world_position.x * 1.8 - TIME * 0.9);
-	float wave_c = sin((world_position.x + world_position.z) * 4.4 - TIME * 1.45);
+	// Flow follows the selected direction, with crossing ripples for natural variation.
+	vec2 flow = normalize(water_flow_direction);
+	vec2 cross_flow = vec2(-flow.y, flow.x);
+	vec2 secondary_flow = normalize(flow + cross_flow * 0.63);
+	float wave_a = sin(dot(world_position.xz, flow) * 2.2 - TIME * 1.2);
+	float wave_b = sin(dot(world_position.xz, secondary_flow) * 2.8 - TIME * 0.9);
+	float wave_c = sin(dot(world_position.xz, cross_flow) * 4.4 - TIME * 1.45);
 	float wave = 0.42 + 0.20 * wave_a + 0.18 * wave_b + 0.10 * wave_c;
 	float glint = smoothstep(0.72, 0.96, wave_a * wave_b + wave_c * 0.25);
 	vec3 water_surface = mix(water_deep, water_light, clamp(wave, 0.0, 1.0) * 0.72);
 	water_surface += vec3(0.08, 0.13, 0.12) * glint;
 
+	float shore_noise = value_noise(world_position * vec3(5.0, 2.0, 5.0) + vec3(TIME * 0.06, 0.0, -TIME * 0.04));
+	float shore_band = 1.0 - smoothstep(0.055, 0.24, abs(water_mask - 0.5));
+	shore_band *= smoothstep(0.18, 0.62, shore_noise * 0.72 + medium * 0.28);
 	ALBEDO = mix(mix(exposed_rock, top_surface, top_blend), water_surface, water_mask);
+	ALBEDO = mix(ALBEDO, water_edge, shore_band * 0.58);
 	ROUGHNESS = mix(0.90 - detail * 0.05 + fine * 0.04, 0.26, water_mask);
 	SPECULAR = mix(0.20, 0.58, water_mask);
 
