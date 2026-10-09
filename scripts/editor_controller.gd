@@ -205,6 +205,9 @@ func _build_editor_ui() -> void:
 	objects_page.add_child(object_grid)
 	_object_buttons.clear()
 	_add_object_button(object_grid, "House", "house")
+	_add_object_button(object_grid, "Cottage", "cottage")
+	_add_object_button(object_grid, "Stone Keep", "castle")
+	_add_object_button(object_grid, "Bridge", "bridge")
 	_add_object_button(object_grid, "Oak Tree", "oak")
 	_add_object_button(object_grid, "Pine", "pine")
 	_add_object_button(object_grid, "Boulder", "boulder")
@@ -251,6 +254,7 @@ func _build_editor_ui() -> void:
 	_add_section_title(map_page, "WORLD GENERATION")
 	_make_button(map_page, "Generate Island", func(): _confirm_generation("island"))
 	_make_button(map_page, "Generate Highlands", func(): _confirm_generation("highlands"))
+	_make_button(map_page, "Generate Kingdom", func(): _confirm_generation("kingdom"))
 	_make_button(map_page, "New Blank Map…", func(): _new_map_dialog.popup_centered())
 
 	_add_section_title(map_page, "SURFACE MATERIALS")
@@ -599,6 +603,9 @@ func _scale_stamp(factor: float) -> void:
 func _object_label(object_kind: String) -> String:
 	match object_kind:
 		"house": return "Cartoon House"
+		"cottage": return "Village Cottage"
+		"castle": return "Stone Keep"
+		"bridge": return "Stone Bridge"
 		"oak": return "Oak Tree"
 		"pine": return "Pine"
 		"boulder": return "Boulder"
@@ -724,7 +731,7 @@ func _place_active_object(cell: Vector2i, record_history: bool = true, object_ki
 	var rotation := _object_rotation_degrees if rotation_degrees < 0.0 else rotation_degrees
 	var scale_factor := _object_scale if object_scale < 0.0 else object_scale
 	var center := grid.world_center(cell)
-	var surface_y := grid.elevation_at(cell) * HexGrid.HEIGHT_PER_LEVEL + CAP_HALF_HEIGHT
+	var surface_y := board_view._surface_height_at(center.x, center.z)
 	if kind == "house":
 		node.scale = Vector3.ONE * HOUSE_MODEL_SCALE * scale_factor
 		surface_y -= HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE * scale_factor
@@ -769,6 +776,95 @@ func _create_placeable_node(kind: String) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Placed" + _object_label(kind).replace(" ", "")
 	match kind:
+		"cottage":
+			var plaster := BoxMesh.new()
+			plaster.size = Vector3(1.36, 0.92, 1.18)
+			_add_object_mesh(root, plaster, Vector3(0.0, 0.48, 0.0), Color("b79b70"))
+			var roof := PrismMesh.new()
+			roof.size = Vector3(1.62, 1.18, 1.42)
+			_add_object_mesh(root, roof, Vector3(0.0, 1.38, 0.0), Color("594038"))
+			var door := BoxMesh.new()
+			door.size = Vector3(0.28, 0.58, 0.07)
+			_add_object_mesh(root, door, Vector3(0.0, 0.29, 0.62), Color("493528"))
+			var window_mesh := BoxMesh.new()
+			window_mesh.size = Vector3(0.22, 0.24, 0.06)
+			_add_object_mesh(root, window_mesh, Vector3(-0.42, 0.58, 0.62), Color("61757a"))
+			_add_object_mesh(root, window_mesh, Vector3(0.42, 0.58, 0.62), Color("61757a"))
+			var chimney := CylinderMesh.new()
+			chimney.top_radius = 0.11
+			chimney.bottom_radius = 0.13
+			chimney.height = 0.75
+			chimney.radial_segments = 5
+			_add_object_mesh(root, chimney, Vector3(0.42, 1.73, -0.24), Color("776957"))
+		"castle":
+			var curtain_wall := BoxMesh.new()
+			curtain_wall.size = Vector3(5.3, 1.55, 0.42)
+			_add_object_mesh(root, curtain_wall, Vector3(0.0, 1.05, -2.55), Color("77756b"))
+			_add_object_mesh(root, curtain_wall, Vector3(-2.55, 1.05, 0.0), Color("716f66"), Vector3(0.16, 1.0, 1.0))
+			_add_object_mesh(root, curtain_wall, Vector3(2.55, 1.05, 0.0), Color("716f66"), Vector3(0.16, 1.0, 1.0))
+			var gate_left := BoxMesh.new()
+			gate_left.size = Vector3(1.55, 1.55, 0.42)
+			_add_object_mesh(root, gate_left, Vector3(-1.86, 1.05, 2.55), Color("77756b"))
+			_add_object_mesh(root, gate_left, Vector3(1.86, 1.05, 2.55), Color("77756b"))
+			var gatehouse := BoxMesh.new()
+			gatehouse.size = Vector3(1.42, 2.3, 0.55)
+			_add_object_mesh(root, gatehouse, Vector3(0.0, 1.25, 2.55), Color("857f72"))
+			var keep := BoxMesh.new()
+			keep.size = Vector3(2.45, 3.55, 2.15)
+			_add_object_mesh(root, keep, Vector3(0.0, 1.80, -0.10), Color("8c887b"))
+			var keep_roof := CylinderMesh.new()
+			keep_roof.top_radius = 0.0
+			keep_roof.bottom_radius = 1.55
+			keep_roof.height = 1.25
+			keep_roof.radial_segments = 4
+			_add_object_mesh(root, keep_roof, Vector3(0.0, 4.18, -0.10), Color("59463d"), Vector3(1.0, 1.0, 0.78))
+			for side in range(4):
+				var tower := CylinderMesh.new()
+				tower.top_radius = 0.48
+				tower.bottom_radius = 0.58
+				tower.height = 2.75
+				tower.radial_segments = 8
+				var tx := -2.48 if side < 2 else 2.48
+				var tz := -2.48 if side % 2 == 0 else 2.48
+				_add_object_mesh(root, tower, Vector3(tx, 1.40, tz), Color("858174"))
+				var tower_roof := CylinderMesh.new()
+				tower_roof.top_radius = 0.0
+				tower_roof.bottom_radius = 0.62
+				tower_roof.height = 0.90
+				tower_roof.radial_segments = 8
+				_add_object_mesh(root, tower_roof, Vector3(tx, 3.20, tz), Color("58443b"))
+			var merlon := BoxMesh.new()
+			merlon.size = Vector3(0.34, 0.40, 0.42)
+			for crenel in range(12):
+				var offset := -2.35 + float(crenel) * 0.43
+				_add_object_mesh(root, merlon, Vector3(offset, 2.00, -2.55), Color("969184"))
+				if crenel < 4 or crenel > 7:
+					_add_object_mesh(root, merlon, Vector3(offset, 2.00, 2.55), Color("969184"))
+			var side_merlon := BoxMesh.new()
+			side_merlon.size = Vector3(0.42, 0.40, 0.34)
+			for crenel in range(10):
+				var offset := -1.95 + float(crenel) * 0.43
+				_add_object_mesh(root, side_merlon, Vector3(-2.55, 2.00, offset), Color("969184"))
+				_add_object_mesh(root, side_merlon, Vector3(2.55, 2.00, offset), Color("969184"))
+		"bridge":
+			var deck := BoxMesh.new()
+			deck.size = Vector3(4.8, 0.20, 1.30)
+			_add_object_mesh(root, deck, Vector3(0.0, 0.34, 0.0), Color("72563a"))
+			var plank := BoxMesh.new()
+			plank.size = Vector3(0.13, 0.08, 1.34)
+			for plank_index in range(17):
+				var x_offset := -2.28 + float(plank_index) * 0.285
+				_add_object_mesh(root, plank, Vector3(x_offset, 0.48, 0.0), Color("92704a"))
+			var rail := BoxMesh.new()
+			rail.size = Vector3(4.8, 0.12, 0.10)
+			_add_object_mesh(root, rail, Vector3(0.0, 0.88, -0.68), Color("634b35"))
+			_add_object_mesh(root, rail, Vector3(0.0, 0.88, 0.68), Color("634b35"))
+			var post := BoxMesh.new()
+			post.size = Vector3(0.14, 0.60, 0.14)
+			for post_index in range(9):
+				var x_offset := -2.25 + float(post_index) * 0.56
+				_add_object_mesh(root, post, Vector3(x_offset, 0.72, -0.68), Color("634b35"))
+				_add_object_mesh(root, post, Vector3(x_offset, 0.72, 0.68), Color("634b35"))
 		"oak":
 			var oak_trunk := CylinderMesh.new()
 			oak_trunk.top_radius = 0.07
@@ -862,16 +958,15 @@ func _erase_object_at(cell: Vector2i) -> void:
 	tool_status.text = "No object on hex %d, %d" % [cell.x, cell.y]
 
 func _refresh_objects_on_cell(cell: Vector2i) -> void:
-	var surface_y := grid.elevation_at(cell) * HexGrid.HEIGHT_PER_LEVEL + CAP_HALF_HEIGHT
+	var center := grid.world_center(cell)
+	var surface_y := board_view._surface_height_at(center.x, center.z)
 	for node in _placed_objects:
 		if not is_instance_valid(node) or not node.visible or node.get_meta("map_cell", INVALID_CELL) != cell:
 			continue
 		var kind := str(node.get_meta("map_object_type", ""))
 		if kind == "house":
 			var object_scale := float(node.get_meta("map_object_scale", 1.0))
-			surface_y = grid.elevation_at(cell) * HexGrid.HEIGHT_PER_LEVEL + CAP_HALF_HEIGHT - HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE * object_scale
-		else:
-			surface_y = grid.elevation_at(cell) * HexGrid.HEIGHT_PER_LEVEL + CAP_HALF_HEIGHT
+			surface_y = board_view._surface_height_at(center.x, center.z) - HOUSE_MODEL_BOTTOM_Y * HOUSE_MODEL_SCALE * object_scale
 		node.position.y = surface_y
 
 func _resnap_all_objects() -> void:
@@ -1010,6 +1105,12 @@ func _undo() -> void:
 		_update_history_buttons()
 		_update_readout()
 		return
+	if change_set.has("_map_generation"):
+		_apply_map_generation_snapshot(change_set, false)
+		_redo_history.append(change_set)
+		_update_history_buttons()
+		_update_readout()
+		return
 	var redo_set: Dictionary = {}
 	for index_variant in change_set.keys():
 		var index := int(index_variant)
@@ -1020,11 +1121,9 @@ func _undo() -> void:
 		grid.set_terrain(cell, int(values["terrain"]))
 		board_view.refresh_cell(cell)
 		_refresh_objects_on_cell(cell)
-		_refresh_objects_on_cell(cell)
-	_redo_history.append(redo_set)
 	board_view.refresh_cliffs()
-	undo_button.disabled = _undo_history.is_empty()
-	redo_button.disabled = false
+	_redo_history.append(redo_set)
+	_update_history_buttons()
 	_update_readout()
 
 func _redo() -> void:
@@ -1039,6 +1138,12 @@ func _redo() -> void:
 		_update_history_buttons()
 		_update_readout()
 		return
+	if change_set.has("_map_generation"):
+		_apply_map_generation_snapshot(change_set, true)
+		_undo_history.append(change_set)
+		_update_history_buttons()
+		_update_readout()
+		return
 	var undo_set: Dictionary = {}
 	for index_variant in change_set.keys():
 		var index := int(index_variant)
@@ -1048,15 +1153,38 @@ func _redo() -> void:
 		grid.set_elevation(cell, int(values["elevation"]))
 		grid.set_terrain(cell, int(values["terrain"]))
 		board_view.refresh_cell(cell)
+		_refresh_objects_on_cell(cell)
 	_undo_history.append(undo_set)
 	board_view.refresh_cliffs()
-	undo_button.disabled = false
-	redo_button.disabled = _redo_history.is_empty()
+	_update_history_buttons()
 	_update_readout()
+
+func _apply_map_generation_snapshot(snapshot: Dictionary, use_generated_state: bool) -> void:
+	for node in _placed_objects:
+		if is_instance_valid(node):
+			node.visible = false
+	var object_key := "after_objects" if use_generated_state else "before_objects"
+	for node_variant in snapshot.get(object_key, []):
+		var node := node_variant as Node3D
+		if is_instance_valid(node):
+			node.visible = true
+	var terrain_key := "after_terrain" if use_generated_state else "before_terrain"
+	var terrain_state: Dictionary = snapshot.get(terrain_key, {})
+	for index_variant in terrain_state:
+		var index := int(index_variant)
+		var cell := grid.cell_from_index(index)
+		var values: Dictionary = terrain_state[index_variant]
+		grid.set_elevation(cell, int(values["elevation"]))
+		grid.set_terrain(cell, int(values["terrain"]))
+	board_view.refresh_all()
+	_resnap_all_objects()
+	board_view.set_selected(selected_cell)
 
 func _confirm_generation(preset: String) -> void:
 	_generation_preset = preset
-	_generation_dialog.dialog_text = "Replace the current terrain with a generated %s? Undo will restore the previous terrain." % ("island" if preset == "island" else "highlands")
+	var preset_name := "island" if preset == "island" else ("highlands" if preset == "highlands" else "kingdom")
+	var extra := " It also places the keep, bridge, cottages, roads, and forests." if preset == "kingdom" else ""
+	_generation_dialog.dialog_text = "Replace the current terrain with a generated %s? Undo will restore the previous map.%s" % [preset_name, extra]
 	_generation_dialog.popup_centered()
 
 func _generate_map() -> void:
@@ -1073,7 +1201,16 @@ func _generate_map() -> void:
 	ridge_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	ridge_noise.fractal_octaves = 3
 
-	var change_set: Dictionary = {}
+	var is_kingdom := _generation_preset == "kingdom"
+	var before_objects: Array[Node3D] = []
+	if is_kingdom:
+		for node in _placed_objects:
+			if is_instance_valid(node) and node.visible:
+				before_objects.append(node)
+				node.visible = false
+
+	var before_terrain: Dictionary = {}
+	var after_terrain: Dictionary = {}
 	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
 		var cell := grid.cell_from_index(index)
 		var nx := (float(cell.x) / float(HexGrid.COLUMNS - 1) - 0.5) * 2.0
@@ -1092,6 +1229,41 @@ func _generate_map() -> void:
 				terrain = HexGrid.Terrain.STONE
 			else:
 				terrain = HexGrid.Terrain.GRASS
+		elif _generation_preset == "kingdom":
+			var city_distance := _kingdom_hex_distance(cell, Vector2i(20, 24))
+			var river_distance := absf(float(cell.x) - _kingdom_river_x(float(cell.y)))
+			var ridge_center := 49.0 + sin(float(cell.y) * 0.055) * 5.0 + sin(float(cell.y) * 0.11) * 1.6
+			var ridge_distance := absf(float(cell.x) - ridge_center)
+			var fields := cell.x >= 35 and cell.x <= 60 and cell.y >= 78 and cell.y <= 117
+			level = roundi(1.0 + broad_value * 1.8)
+			if ridge_distance < 4.2 and cell.y > 9 and cell.y < 104:
+				level += roundi((1.0 - ridge_distance / 4.2) * 7.0 + ridge_noise.get_noise_2d(float(cell.x) * 0.2, float(cell.y) * 0.11) * 2.0)
+			if city_distance <= 4:
+				level = maxi(level, 6)
+			elif city_distance <= 9:
+				level = maxi(level, roundi(6.0 - float(city_distance - 4) * 0.85))
+			if fields:
+				level = clampi(roundi(0.7 + broad_value * 0.7), 0, 2)
+
+			if river_distance <= 1.05:
+				terrain = HexGrid.Terrain.WATER
+				level = 0
+			elif river_distance <= 2.25:
+				terrain = HexGrid.Terrain.SAND
+				level = mini(level, 1)
+			elif fields and ((floori(float(cell.x - 35) / 5.0) + floori(float(cell.y - 78) / 8.0)) % 2 == 0):
+				terrain = HexGrid.Terrain.DIRT
+			elif ridge_distance < 4.0 and level >= 5:
+				terrain = HexGrid.Terrain.STONE
+			elif broad_value < -0.38:
+				terrain = HexGrid.Terrain.DIRT
+			else:
+				terrain = HexGrid.Terrain.GRASS
+
+			var road_x := _kingdom_road_x(float(cell.y))
+			if absf(float(cell.x) - road_x) <= 0.58 and river_distance > 1.05:
+				terrain = HexGrid.Terrain.ROAD
+				level = mini(level, 2)
 		else:
 			var ridge := 1.0 - absf(ridge_noise.get_noise_2d(float(cell.x + 91) * 0.045, float(cell.y - 43) * 0.045))
 			level = roundi(2.0 + broad_value * 4.0 + ridge * 5.0)
@@ -1103,22 +1275,132 @@ func _generate_map() -> void:
 				terrain = HexGrid.Terrain.STONE
 			else:
 				terrain = HexGrid.Terrain.GRASS
+
 		var old_elevation := grid.elevation_at(cell)
 		var old_terrain := grid.terrain_at(cell)
 		var bounded_level := clampi(level, HexGrid.MIN_ELEVATION, HexGrid.MAX_ELEVATION)
 		if old_elevation == bounded_level and old_terrain == terrain:
 			continue
-		change_set[index] = {"elevation": old_elevation, "terrain": old_terrain}
+		before_terrain[index] = {"elevation": old_elevation, "terrain": old_terrain}
 		grid.set_elevation(cell, bounded_level)
 		grid.set_terrain(cell, terrain)
+		if is_kingdom:
+			after_terrain[index] = {"elevation": bounded_level, "terrain": terrain}
 
-	_resnap_all_objects()
 	board_view.refresh_all()
+	var generated_objects: Array[Node3D] = []
+	if is_kingdom:
+		generated_objects = _populate_kingdom_objects(broad.seed)
+	_resnap_all_objects()
 	_last_stroke_cell = INVALID_CELL
-	if not change_set.is_empty():
-		_commit_undo(change_set)
-	tool_status.text = "Generated %s • Undo to restore" % ("island" if _generation_preset == "island" else "highlands")
+	if is_kingdom:
+		_commit_undo({
+			"_map_generation": true,
+			"before_terrain": before_terrain,
+			"after_terrain": after_terrain,
+			"before_objects": before_objects,
+			"after_objects": generated_objects
+		})
+	elif not before_terrain.is_empty():
+		_commit_undo(before_terrain)
+	var preset_name := "island" if _generation_preset == "island" else ("highlands" if _generation_preset == "highlands" else "kingdom")
+	tool_status.text = "Generated %s • Undo to restore" % preset_name
 	_update_readout()
+
+func _kingdom_river_x(row: float) -> float:
+	var progress := row / float(HexGrid.ROWS - 1)
+	return 51.0 - 37.0 * progress + sin(progress * TAU * 1.65) * 6.0 + sin(progress * TAU * 3.2) * 1.5
+
+func _kingdom_road_x(row: float) -> float:
+	var progress := row / float(HexGrid.ROWS - 1)
+	return 20.0 + 18.0 * progress + sin(progress * TAU * 1.25) * 4.0
+
+func _kingdom_hex_distance(a: Vector2i, b: Vector2i) -> int:
+	var axial_a := grid.axial_coordinates(a)
+	var axial_b := grid.axial_coordinates(b)
+	var dq := axial_a.x - axial_b.x
+	var dr := axial_a.y - axial_b.y
+	return maxi(absi(dq), maxi(absi(dr), absi(dq + dr)))
+
+func _populate_kingdom_objects(seed_value: int) -> Array[Node3D]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var spawned: Array[Node3D] = []
+	var occupied: Dictionary = {}
+	_spawn_kingdom_object("castle", Vector2i(20, 24), rng, occupied, spawned)
+	var bridge_row := 63
+	var bridge_column := clampi(roundi(_kingdom_river_x(float(bridge_row))), 0, HexGrid.COLUMNS - 1)
+	_spawn_kingdom_object("bridge", Vector2i(bridge_column, bridge_row), rng, occupied, spawned)
+	_scatter_kingdom_houses(Vector2i(20, 24), 5, 15, 60, rng, occupied, spawned)
+	_scatter_kingdom_houses(Vector2i(44, 96), 2, 6, 24, rng, occupied, spawned)
+	_scatter_kingdom_houses(Vector2i(11, 75), 2, 5, 14, rng, occupied, spawned)
+	_scatter_kingdom_forest(Vector2i(51, 20), 10, 72, rng, occupied, spawned)
+	_scatter_kingdom_forest(Vector2i(54, 61), 12, 96, rng, occupied, spawned)
+	_scatter_kingdom_forest(Vector2i(14, 109), 10, 72, rng, occupied, spawned)
+	for row in range(14, 102, 5):
+		var ridge_column := clampi(roundi(49.0 + sin(float(row) * 0.055) * 5.0), 0, HexGrid.COLUMNS - 1)
+		var boulder_cell := Vector2i(ridge_column, row)
+		if grid.terrain_at(boulder_cell) == HexGrid.Terrain.STONE:
+			_spawn_kingdom_object("boulder", boulder_cell, rng, occupied, spawned)
+	return spawned
+
+func _spawn_kingdom_object(kind: String, cell: Vector2i, rng: RandomNumberGenerator, occupied: Dictionary, spawned: Array[Node3D]) -> void:
+	if not grid.contains(cell):
+		return
+	var index := grid.index_of(cell)
+	if occupied.has(index):
+		return
+	var rotation := rng.randf_range(0.0, 360.0) if kind in ["cottage", "house", "oak", "pine", "boulder"] else 0.0
+	var scale_factor := rng.randf_range(0.78, 1.12) if kind not in ["castle", "bridge"] else 1.0
+	var node := _place_active_object(cell, false, kind, rotation, scale_factor)
+	if node == null:
+		return
+	occupied[index] = true
+	spawned.append(node)
+
+func _scatter_kingdom_houses(center: Vector2i, inner_radius: int, outer_radius: int, desired_count: int, rng: RandomNumberGenerator, occupied: Dictionary, spawned: Array[Node3D]) -> void:
+	var placed := 0
+	for attempt in range(desired_count * 24):
+		if placed >= desired_count:
+			break
+		var cell := Vector2i(rng.randi_range(maxi(0, center.x - outer_radius), mini(HexGrid.COLUMNS - 1, center.x + outer_radius)), rng.randi_range(maxi(0, center.y - outer_radius), mini(HexGrid.ROWS - 1, center.y + outer_radius)))
+		var distance := _kingdom_hex_distance(cell, center)
+		var index := grid.index_of(cell)
+		var terrain := grid.terrain_at(cell)
+		if distance < inner_radius or distance > outer_radius or occupied.has(index):
+			continue
+		if terrain == HexGrid.Terrain.WATER or terrain == HexGrid.Terrain.ROAD or terrain == HexGrid.Terrain.STONE:
+			continue
+		if absf(float(cell.x) - _kingdom_river_x(float(cell.y))) < 3.2:
+			continue
+		var kind := "cottage" if rng.randf() < 0.86 else "house"
+		_spawn_kingdom_object(kind, cell, rng, occupied, spawned)
+		if occupied.has(index):
+			placed += 1
+
+func _scatter_kingdom_forest(center: Vector2i, radius: int, desired_count: int, rng: RandomNumberGenerator, occupied: Dictionary, spawned: Array[Node3D]) -> void:
+	var placed := 0
+	for attempt in range(desired_count * 24):
+		if placed >= desired_count:
+			break
+		var cell := Vector2i(rng.randi_range(maxi(0, center.x - radius), mini(HexGrid.COLUMNS - 1, center.x + radius)), rng.randi_range(maxi(0, center.y - radius), mini(HexGrid.ROWS - 1, center.y + radius)))
+		var distance := _kingdom_hex_distance(cell, center)
+		var index := grid.index_of(cell)
+		var terrain := grid.terrain_at(cell)
+		if distance > radius or distance < 3 or occupied.has(index):
+			continue
+		if terrain == HexGrid.Terrain.WATER or terrain == HexGrid.Terrain.ROAD or terrain == HexGrid.Terrain.STONE:
+			continue
+		if absf(float(cell.x) - _kingdom_river_x(float(cell.y))) < 3.8:
+			continue
+		if absf(float(cell.x) - _kingdom_road_x(float(cell.y)) ) < 1.8:
+			continue
+		if _kingdom_hex_distance(cell, Vector2i(20, 24)) < 13:
+			continue
+		var kind := "pine" if rng.randf() < 0.63 else "oak"
+		_spawn_kingdom_object(kind, cell, rng, occupied, spawned)
+		if occupied.has(index):
+			placed += 1
 
 func _new_blank_map() -> void:
 	grid.elevations.fill(0)
@@ -1210,7 +1492,7 @@ func _load_map_file(path: String) -> void:
 			var record: Dictionary = record_variant
 			var cell := Vector2i(int(record.get("x", -1)), int(record.get("y", -1)))
 			var kind := str(record.get("type", ""))
-			if not grid.contains(cell) or not ["house", "oak", "pine", "boulder", "marker"].has(kind):
+			if not grid.contains(cell) or not ["house", "cottage", "castle", "bridge", "oak", "pine", "boulder", "marker"].has(kind):
 				continue
 			_place_active_object(
 				cell,
