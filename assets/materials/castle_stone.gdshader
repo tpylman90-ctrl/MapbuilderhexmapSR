@@ -52,8 +52,13 @@ void fragment() {
 		float mortar_mask = 1.0 - smoothstep(0.035, 0.080, mortar_gap);
 		float block_tone = hash2(brick_id);
 		float weathering = value_noise(world_position.xz * 3.7 + world_position.xy * 1.2);
-		vec3 block_color = base * mix(0.78, 1.12, block_tone);
-		block_color *= mix(0.91, 1.06, weathering);
+		vec3 block_color = base * mix(0.76, 1.12, block_tone);
+		block_color *= mix(0.89, 1.06, weathering);
+		// Fine mineral grain, pitting and subtle vertical runoff make masonry read at close range.
+		float grain = value_noise(plane * 34.0);
+		float pits = smoothstep(0.70, 0.91, value_noise(plane * 71.0 + brick_id * 2.7));
+		float runoff = smoothstep(0.57, 0.83, value_noise(vec2(plane.x * 2.4 + block_tone * 8.0, world_position.y * 0.52)));
+		block_color *= 0.93 + grain * 0.11 - pits * 0.08 - runoff * 0.055;
 		vec3 mortar_color = base * vec3(0.46, 0.44, 0.40);
 		ALBEDO = mix(block_color, mortar_color, mortar_mask);
 	} else {
