@@ -2,7 +2,7 @@ class_name HexBoardView
 extends Node3D
 
 const CAP_HEIGHT: float = 0.18
-const EDGE_RADIUS: float = HexGrid.HEX_RADIUS * 0.99
+const EDGE_RADIUS: float = HexGrid.HEX_RADIUS
 const STEP_HEIGHT: float = HexGrid.HEIGHT_PER_LEVEL
 const GRASS_TUFTS_PER_HEX: int = 6
 const SELECT_COLOR := Color("efcf78")
