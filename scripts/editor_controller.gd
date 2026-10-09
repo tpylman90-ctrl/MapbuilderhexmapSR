@@ -1859,7 +1859,7 @@ func _apply_map_generation_snapshot(snapshot: Dictionary, use_generated_state: b
 
 func _confirm_generation(preset: String) -> void:
 	_generation_preset = preset
-	var preset_name := {"island": "island", "highlands": "highlands", "kingdom": "kingdom", "ashenreach": "Ashenreach"}[preset]
+	var preset_name: String = {"island": "island", "highlands": "highlands", "kingdom": "kingdom", "ashenreach": "Ashenreach"}[preset]
 	var extra := " It also places the keep, bridge, cottages, roads, and forests." if preset == "kingdom" else (" It builds the volcano, lava rivers, obsidian ridges, and Citadel." if preset == "ashenreach" else "")
 	_generation_dialog.dialog_text = "Replace the current terrain with a generated %s? Undo will restore the previous map.%s" % [preset_name, extra]
 	_generation_dialog.popup_centered()
@@ -2021,7 +2021,7 @@ func _generate_map() -> void:
 		})
 	elif not before_terrain.is_empty():
 		_commit_undo(before_terrain)
-	var preset_name := {"island": "island", "highlands": "highlands", "kingdom": "kingdom", "ashenreach": "Ashenreach"}[_generation_preset]
+	var preset_name: String = {"island": "island", "highlands": "highlands", "kingdom": "kingdom", "ashenreach": "Ashenreach"}[_generation_preset]
 	tool_status.text = "Generated %s • Undo to restore" % preset_name
 	_update_readout()
 
