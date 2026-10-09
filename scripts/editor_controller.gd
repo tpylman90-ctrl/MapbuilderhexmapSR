@@ -1411,12 +1411,13 @@ func _populate_kingdom_objects(seed_value: int) -> Array[Node3D]:
 				var tangent_rotation := rad_to_deg(atan2(outward.z, outward.x)) + 90.0
 				_spawn_kingdom_object("wall", candidate, rng, occupied, spawned, tangent_rotation)
 	# Short fenced field plots make the agricultural district read at map scale.
-	for field_origin in [Vector2i(36, 80), Vector2i(45, 80), Vector2i(54, 80), Vector2i(36, 94), Vector2i(54, 94), Vector2i(36, 108), Vector2i(45, 108), Vector2i(54, 108)]:
+	var field_origins: Array[Vector2i] = [Vector2i(36, 80), Vector2i(45, 80), Vector2i(54, 80), Vector2i(36, 94), Vector2i(54, 94), Vector2i(36, 108), Vector2i(45, 108), Vector2i(54, 108)]
+	for field_origin in field_origins:
 		for offset in range(5):
-			var top_cell := field_origin + Vector2i(offset, 0)
-			var bottom_cell := field_origin + Vector2i(offset, 6)
-			var left_cell := field_origin + Vector2i(0, offset)
-			var right_cell := field_origin + Vector2i(4, offset)
+			var top_cell: Vector2i = field_origin + Vector2i(offset, 0)
+			var bottom_cell: Vector2i = field_origin + Vector2i(offset, 6)
+			var left_cell: Vector2i = field_origin + Vector2i(0, offset)
+			var right_cell: Vector2i = field_origin + Vector2i(4, offset)
 			for fence_cell in [top_cell, bottom_cell, left_cell, right_cell]:
 				var outward_angle := atan2(float(fence_cell.y - field_origin.y - 3), float(fence_cell.x - field_origin.x - 2))
 				var fence_rotation := rad_to_deg(outward_angle) + 90.0
