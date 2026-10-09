@@ -56,7 +56,7 @@ var _load_confirmation: ConfirmationDialog
 var _pending_load_path := ""
 var _new_map_dialog: ConfirmationDialog
 var _generation_dialog: ConfirmationDialog
-var _outline_node: MultiMeshInstance3D
+var _outline_node: MeshInstance3D
 var _grass_node: MultiMeshInstance3D
 var pan_mode: bool = false
 var _pointer_active: bool = false
