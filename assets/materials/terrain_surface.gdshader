@@ -81,12 +81,8 @@ void fragment() {
 	float wave_c = sin((world_position.x + world_position.z) * 4.4 - TIME * 1.45);
 	float wave = 0.42 + 0.20 * wave_a + 0.18 * wave_b + 0.10 * wave_c;
 	float glint = smoothstep(0.72, 0.96, wave_a * wave_b + wave_c * 0.25);
-	vec2 hex_uv = (UV - vec2(0.5)) * 2.0;
-	float hex_edge = max(abs(hex_uv.y), abs(hex_uv.x) * 0.8660254 + abs(hex_uv.y) * 0.5);
-	float shore = 1.0 - smoothstep(0.88, 0.985, hex_edge);
 	vec3 water_surface = mix(water_deep, water_light, clamp(wave, 0.0, 1.0) * 0.72);
 	water_surface += vec3(0.08, 0.13, 0.12) * glint;
-	water_surface = mix(water_surface, water_edge, (1.0 - shore) * 0.32);
 
 	ALBEDO = mix(mix(exposed_rock, top_surface, top_blend), water_surface, water_mask);
 	ROUGHNESS = mix(0.90 - detail * 0.05 + fine * 0.04, 0.26, water_mask);

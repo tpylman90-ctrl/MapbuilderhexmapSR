@@ -9,8 +9,7 @@ const SELECT_COLOR := Color("efcf78")
 
 var data: HexGrid
 var world_environment: WorldEnvironment
-var tile_instances: MultiMesh
-var grid_node: MultiMeshInstance3D
+var grid_node: MeshInstance3D
 var grass_instances: MultiMesh
 var grass_node: MultiMeshInstance3D
 var water_instances: MultiMesh
@@ -27,11 +26,17 @@ var terrain_shader_material: ShaderMaterial
 var cliff_shader_material: ShaderMaterial
 var surface_detail_strength: float = 0.78
 var cliff_detail_strength: float = 0.82
-var outline_instances: MultiMesh
-var outline_node: MultiMeshInstance3D
+var outline_node: MeshInstance3D
 var cliff_node: MeshInstance3D
 var selection_node: MeshInstance3D
 var selected_cell := Vector2i(-1, -1)
+var corner_cells: Dictionary = {}
+var corner_height_cache: Dictionary = {}
+var corner_color_cache: Dictionary = {}
+var displayed_elevations := PackedInt32Array()
+var _surface_update_queued := false
+var _surface_heights_dirty := false
+var _surface_dirty_cells: Dictionary = {}
 var cliff_noise := FastNoiseLite.new()
 var cliff_blend_top_y := 0.0
 var cliff_blend_color := Color.WHITE
@@ -99,83 +104,156 @@ func set_distant_haze(enabled: bool) -> void:
 	if world_environment != null and world_environment.environment != null:
 		world_environment.environment.fog_enabled = enabled
 
-func _make_hex_mesh() -> ArrayMesh:
-	var surface := SurfaceTool.new()
-	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var top_y := CAP_HEIGHT * 0.5
-	var bottom_y := -CAP_HEIGHT * 0.5
-	for edge in range(6):
-		var angle_a := deg_to_rad(30.0 + 60.0 * edge)
-		var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
-		var top_a := Vector3(cos(angle_a) * EDGE_RADIUS, top_y, sin(angle_a) * EDGE_RADIUS)
-		var top_b := Vector3(cos(angle_b) * EDGE_RADIUS, top_y, sin(angle_b) * EDGE_RADIUS)
-		var bottom_a := Vector3(cos(angle_a) * EDGE_RADIUS, bottom_y, sin(angle_a) * EDGE_RADIUS)
-		var bottom_b := Vector3(cos(angle_b) * EDGE_RADIUS, bottom_y, sin(angle_b) * EDGE_RADIUS)
-		# Winding is explicitly upward so the top remains visible in mobile renderers.
-		_add_top_triangle(surface, Vector3(0.0, top_y, 0.0), top_b, top_a, Color.WHITE)
-		_add_triangle(surface, bottom_a, bottom_b, top_b, Color("b7b7b7"))
-		_add_triangle(surface, bottom_a, top_b, top_a, Color("b7b7b7"))
-	surface.generate_normals()
-	return surface.commit()
-
-func _add_top_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, color: Color) -> void:
-	var scale := 1.0 / (EDGE_RADIUS * 2.0)
-	for point in [a, b, c]:
-		surface.set_color(color)
-		surface.set_uv(Vector2(point.x * scale + 0.5, point.z * scale + 0.5))
-		surface.add_vertex(point)
-
-func _make_grid_outline_mesh() -> ArrayMesh:
-	var surface := SurfaceTool.new()
-	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var outer_radius := HexGrid.HEX_RADIUS * 1.005
-	var inner_radius := HexGrid.HEX_RADIUS * 0.975
-	var y := CAP_HEIGHT * 0.5 + 0.008
-	for edge in range(6):
-		var angle_a := deg_to_rad(30.0 + 60.0 * edge)
-		var angle_b := deg_to_rad(30.0 + 60.0 * ((edge + 1) % 6))
-		var outer_a := Vector3(cos(angle_a) * outer_radius, y, sin(angle_a) * outer_radius)
-		var outer_b := Vector3(cos(angle_b) * outer_radius, y, sin(angle_b) * outer_radius)
-		var inner_a := Vector3(cos(angle_a) * inner_radius, y, sin(angle_a) * inner_radius)
-		var inner_b := Vector3(cos(angle_b) * inner_radius, y, sin(angle_b) * inner_radius)
-		_add_triangle(surface, outer_a, outer_b, inner_b, Color.WHITE)
-		_add_triangle(surface, outer_a, inner_b, inner_a, Color.WHITE)
-	surface.generate_normals()
-	return surface.commit()
-
 func _build_tile_mesh() -> void:
-	var multi := MultiMesh.new()
-	multi.transform_format = MultiMesh.TRANSFORM_3D
-	multi.use_colors = true
-	multi.mesh = _make_hex_mesh()
-	multi.instance_count = HexGrid.COLUMNS * HexGrid.ROWS
-	tile_instances = multi
-	grid_node = MultiMeshInstance3D.new()
-	grid_node.name = "HexGrid64x128"
-	grid_node.multimesh = tile_instances
+	grid_node = MeshInstance3D.new()
+	grid_node.name = "ContinuousHexTerrain"
 	terrain_shader_material = ShaderMaterial.new()
 	terrain_shader_material.shader = load("res://assets/materials/terrain_surface.gdshader") as Shader
 	terrain_shader_material.set_shader_parameter("surface_detail", surface_detail_strength)
 	grid_node.material_override = terrain_shader_material
 	add_child(grid_node)
-	_build_grass_instances()
-	_build_water_instances()
-	_build_shoreline_node()
 
-	var outlines := MultiMesh.new()
-	outlines.transform_format = MultiMesh.TRANSFORM_3D
-	outlines.mesh = _make_grid_outline_mesh()
-	outlines.instance_count = HexGrid.COLUMNS * HexGrid.ROWS
-	outline_instances = outlines
-	outline_node = MultiMeshInstance3D.new()
-	outline_node.name = "HexGridLines"
-	outline_node.multimesh = outline_instances
+	outline_node = MeshInstance3D.new()
+	outline_node.name = "HexGridLinesOnTerrain"
 	var outline_material := StandardMaterial3D.new()
 	outline_material.albedo_color = Color("536649")
 	outline_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	outline_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	outline_node.material_override = outline_material
 	add_child(outline_node)
+
+	_build_grass_instances()
+	_build_water_instances()
+	_build_shoreline_node()
+
+func _corner_world_position(cell: Vector2i, corner: int) -> Vector3:
+	var center := data.world_center(cell)
+	var angle := deg_to_rad(30.0 + 60.0 * corner)
+	var x := center.x + cos(angle) * EDGE_RADIUS
+	var z := center.z + sin(angle) * EDGE_RADIUS
+	return Vector3(roundf(x * 10000.0) / 10000.0, 0.0, roundf(z * 10000.0) / 10000.0)
+
+func _corner_key(cell: Vector2i, corner: int) -> Vector2i:
+	var point := _corner_world_position(cell, corner)
+	return Vector2i(roundi(point.x * 10000.0), roundi(point.z * 10000.0))
+
+func _rebuild_corner_height_cache() -> void:
+	corner_cells.clear()
+	corner_height_cache.clear()
+	corner_color_cache.clear()
+	for row in range(HexGrid.ROWS):
+		for column in range(HexGrid.COLUMNS):
+			var cell := Vector2i(column, row)
+			for corner in range(6):
+				var key := _corner_key(cell, corner)
+				if not corner_cells.has(key):
+					corner_cells[key] = []
+				corner_cells[key].append(cell)
+	for key in corner_cells:
+		var members: Array = corner_cells[key]
+		var height_sum := 0.0
+		var color_sum := Color(0.0, 0.0, 0.0, 0.0)
+		for member in members:
+			height_sum += float(data.elevation_at(member)) * STEP_HEIGHT + CAP_HEIGHT * 0.5
+			color_sum += HexGrid.TERRAIN_COLORS[data.terrain_at(member)]
+		var count := float(members.size())
+		corner_height_cache[key] = height_sum / count
+		corner_color_cache[key] = Color(color_sum.r / count, color_sum.g / count, color_sum.b / count, 1.0)
+
+func _cell_corner_has_cliff(cell: Vector2i, corner: int) -> bool:
+	var level := data.elevation_at(cell)
+	for edge in [(corner + 5) % 6, corner]:
+		var neighbor := data.neighbor_for_edge(cell, edge)
+		if data.contains(neighbor) and absi(data.elevation_at(neighbor) - level) >= 2:
+			return true
+	return false
+
+func _cell_corner_height(cell: Vector2i, corner: int) -> float:
+	var level := data.elevation_at(cell)
+	if _cell_corner_has_cliff(cell, corner):
+		return float(level) * STEP_HEIGHT + CAP_HEIGHT * 0.5
+	return float(corner_height_cache.get(_corner_key(cell, corner), float(level) * STEP_HEIGHT + CAP_HEIGHT * 0.5))
+
+func _cell_corner_color(cell: Vector2i, corner: int) -> Color:
+	if _cell_corner_has_cliff(cell, corner):
+		return HexGrid.TERRAIN_COLORS[data.terrain_at(cell)]
+	return corner_color_cache.get(_corner_key(cell, corner), HexGrid.TERRAIN_COLORS[data.terrain_at(cell)])
+
+func _add_terrain_vertex(surface: SurfaceTool, point: Vector3, color: Color) -> void:
+	surface.set_color(color)
+	surface.set_uv(Vector2(point.x, point.z) * 0.5)
+	surface.add_vertex(point)
+
+func _rebuild_terrain_surface() -> void:
+	if grid_node == null:
+		return
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for row in range(HexGrid.ROWS):
+		for column in range(HexGrid.COLUMNS):
+			var cell := Vector2i(column, row)
+			var center := data.world_center(cell)
+			center.y = float(data.elevation_at(cell)) * STEP_HEIGHT + CAP_HEIGHT * 0.5
+			var center_color := HexGrid.TERRAIN_COLORS[data.terrain_at(cell)]
+			for corner in range(6):
+				var a := _corner_world_position(cell, corner)
+				var b := _corner_world_position(cell, (corner + 1) % 6)
+				a.y = _cell_corner_height(cell, corner)
+				b.y = _cell_corner_height(cell, (corner + 1) % 6)
+				_add_terrain_vertex(surface, center, center_color)
+				_add_terrain_vertex(surface, b, _cell_corner_color(cell, (corner + 1) % 6))
+				_add_terrain_vertex(surface, a, _cell_corner_color(cell, corner))
+	surface.index()
+	surface.generate_normals()
+	grid_node.mesh = surface.commit()
+
+func _rebuild_grid_outlines() -> void:
+	if outline_node == null:
+		return
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_LINES)
+	for row in range(HexGrid.ROWS):
+		for column in range(HexGrid.COLUMNS):
+			var cell := Vector2i(column, row)
+			for corner in range(6):
+				var a := _corner_world_position(cell, corner)
+				var b := _corner_world_position(cell, (corner + 1) % 6)
+				a.y = _cell_corner_height(cell, corner) + 0.012
+				b.y = _cell_corner_height(cell, (corner + 1) % 6) + 0.012
+				surface.add_vertex(a)
+				surface.add_vertex(b)
+	outline_node.mesh = surface.commit()
+
+func _queue_terrain_surface_update(cell: Vector2i, elevation_changed: bool) -> void:
+	_surface_dirty_cells[data.index_of(cell)] = cell
+	for edge in range(6):
+		var neighbor := data.neighbor_for_edge(cell, edge)
+		if data.contains(neighbor):
+			_surface_dirty_cells[data.index_of(neighbor)] = neighbor
+	_surface_heights_dirty = _surface_heights_dirty or elevation_changed
+	if _surface_update_queued:
+		return
+	_surface_update_queued = true
+	call_deferred("_flush_terrain_surface_update")
+
+func _flush_terrain_surface_update() -> void:
+	_surface_update_queued = false
+	if _refreshing_all:
+		return
+	_rebuild_corner_height_cache()
+	_rebuild_terrain_surface()
+	_rebuild_grid_outlines()
+	if _surface_heights_dirty:
+		_rebuild_cliffs()
+		if displayed_elevations.size() != data.elevations.size():
+			displayed_elevations = data.elevations.duplicate()
+		for index in _surface_dirty_cells:
+			displayed_elevations[index] = data.elevation_at(_surface_dirty_cells[index])
+	for cell in _surface_dirty_cells.values():
+		_refresh_grass_cell(cell, data.index_of(cell))
+	_surface_dirty_cells.clear()
+	_surface_heights_dirty = false
+	_update_selection()
 
 func _build_water_instances() -> void:
 	water_instances = MultiMesh.new()
@@ -392,11 +470,34 @@ func _add_colored_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vect
 		surface.set_color(vertex[1])
 		surface.add_vertex(vertex[0])
 
+func _surface_height_at(world_x: float, world_z: float) -> float:
+	var cell := data.world_to_cell(world_x, world_z)
+	if not data.contains(cell):
+		return 0.0
+	var center := data.world_center(cell)
+	center.y = float(data.elevation_at(cell)) * STEP_HEIGHT + CAP_HEIGHT * 0.5
+	var sample := Vector2(world_x, world_z)
+	for corner in range(6):
+		var a := _corner_world_position(cell, corner)
+		var b := _corner_world_position(cell, (corner + 1) % 6)
+		a.y = _cell_corner_height(cell, corner)
+		b.y = _cell_corner_height(cell, (corner + 1) % 6)
+		var v0 := Vector2(a.x - center.x, a.z - center.z)
+		var v1 := Vector2(b.x - center.x, b.z - center.z)
+		var v2 := sample - Vector2(center.x, center.z)
+		var denominator := v0.x * v1.y - v1.x * v0.y
+		if absf(denominator) < 0.00001:
+			continue
+		var weight_a := (v2.x * v1.y - v1.x * v2.y) / denominator
+		var weight_b := (v0.x * v2.y - v2.x * v0.y) / denominator
+		if weight_a >= -0.001 and weight_b >= -0.001 and weight_a + weight_b <= 1.001:
+			return center.y * (1.0 - weight_a - weight_b) + a.y * weight_a + b.y * weight_b
+	return center.y
+
 func _refresh_grass_cell(cell: Vector2i, index: int) -> void:
 	var is_grass := data.terrain_at(cell) == HexGrid.Terrain.GRASS
 	var base_index := index * GRASS_TUFTS_PER_HEX
 	var center := data.world_center(cell)
-	center.y = data.elevation_at(cell) * STEP_HEIGHT + CAP_HEIGHT * 0.5 + 0.004
 	for tuft_index in range(GRASS_TUFTS_PER_HEX):
 		var instance_index := base_index + tuft_index
 		var rng := RandomNumberGenerator.new()
@@ -408,6 +509,7 @@ func _refresh_grass_cell(cell: Vector2i, index: int) -> void:
 		var tuft_center := center
 		tuft_center.x += rng.randf_range(-0.48, 0.48)
 		tuft_center.z += rng.randf_range(-0.42, 0.42)
+		tuft_center.y = _surface_height_at(tuft_center.x, tuft_center.z) + 0.006
 		var scale := rng.randf_range(0.72, 1.42)
 		var rotation := rng.randf_range(0.0, TAU)
 		var basis := Basis(Vector3.UP, rotation).scaled(Vector3(scale, scale, scale))
@@ -416,30 +518,31 @@ func _refresh_grass_cell(cell: Vector2i, index: int) -> void:
 		grass_instances.set_instance_color(instance_index, Color(tint, tint, tint, 1.0))
 
 func _build_selection_outline() -> void:
-	var outline := ImmediateMesh.new()
+	selection_node = MeshInstance3D.new()
+	selection_node.name = "SelectedHexOutline"
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_color = SELECT_COLOR
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	outline.surface_begin(Mesh.PRIMITIVE_LINE_STRIP, material)
-	for corner in range(7):
-		var angle := deg_to_rad(30.0 + 60.0 * (corner % 6))
-		outline.surface_add_vertex(Vector3(cos(angle) * 1.01, 0.015, sin(angle) * 1.01))
-	outline.surface_end()
-	selection_node = MeshInstance3D.new()
-	selection_node.name = "SelectedHexOutline"
-	selection_node.mesh = outline
+	selection_node.material_override = material
 	selection_node.visible = false
 	add_child(selection_node)
 
 func refresh_all() -> void:
 	_refreshing_all = true
+	_surface_update_queued = false
+	_surface_heights_dirty = false
+	_surface_dirty_cells.clear()
 	shoreline_edges.clear()
+	_rebuild_corner_height_cache()
 	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
 		refresh_cell(data.cell_from_index(index))
 	for index in range(HexGrid.COLUMNS * HexGrid.ROWS):
 		_refresh_shoreline_cell(data.cell_from_index(index))
 	_refreshing_all = false
+	displayed_elevations = data.elevations.duplicate()
+	_rebuild_terrain_surface()
+	_rebuild_grid_outlines()
 	_rebuild_shoreline_mesh()
 	_rebuild_cliffs()
 	_update_selection()
@@ -450,12 +553,11 @@ func refresh_cell(cell: Vector2i) -> void:
 	var index := data.index_of(cell)
 	var center := data.world_center(cell)
 	center.y = data.elevation_at(cell) * STEP_HEIGHT
-	tile_instances.set_instance_transform(index, Transform3D(Basis.IDENTITY, center))
-	outline_instances.set_instance_transform(index, Transform3D(Basis.IDENTITY, center))
-	tile_instances.set_instance_color(index, HexGrid.TERRAIN_COLORS[data.terrain_at(cell)])
 	_refresh_grass_cell(cell, index)
 	_refresh_water_cell(cell, index, center)
 	if not _refreshing_all:
+		var elevation_changed := displayed_elevations.size() != data.elevations.size() or displayed_elevations[index] != data.elevation_at(cell)
+		_queue_terrain_surface_update(cell, elevation_changed)
 		_refresh_shorelines_around(cell)
 	if cell == selected_cell:
 		_update_selection()
@@ -468,9 +570,21 @@ func _update_selection() -> void:
 	if selection_node == null or not data.contains(selected_cell):
 		return
 	var center := data.world_center(selected_cell)
-	center.y = data.elevation_at(selected_cell) * STEP_HEIGHT + CAP_HEIGHT * 0.5
+	center.y = float(data.elevation_at(selected_cell)) * STEP_HEIGHT + CAP_HEIGHT * 0.5
 	selection_node.position = center
+	selection_node.mesh = _make_selection_outline_mesh(selected_cell)
 	selection_node.visible = true
+
+func _make_selection_outline_mesh(cell: Vector2i) -> ArrayMesh:
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_LINE_STRIP)
+	var center_y := float(data.elevation_at(cell)) * STEP_HEIGHT + CAP_HEIGHT * 0.5
+	for corner in range(7):
+		var corner_index := corner % 6
+		var angle := deg_to_rad(30.0 + 60.0 * corner_index)
+		var corner_y := _cell_corner_height(cell, corner_index)
+		surface.add_vertex(Vector3(cos(angle) * 1.01, corner_y - center_y + 0.02, sin(angle) * 1.01))
+	return surface.commit()
 
 func _rebuild_cliffs() -> void:
 	if cliff_node != null:
@@ -492,7 +606,7 @@ func _rebuild_cliffs() -> void:
 				var low_level: int
 				if data.contains(neighbor):
 					var neighbor_level := data.elevation_at(neighbor)
-					if cell_level <= neighbor_level:
+					if cell_level - neighbor_level < 2:
 						continue
 					high_level = cell_level
 					low_level = neighbor_level
