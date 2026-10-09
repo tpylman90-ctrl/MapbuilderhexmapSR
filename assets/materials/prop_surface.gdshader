@@ -2,6 +2,7 @@ shader_type spatial;
 render_mode diffuse_burley, cull_back;
 
 uniform vec4 base_color : source_color = vec4(0.45, 0.38, 0.28, 1.0);
+uniform bool use_vertex_color = false;
 uniform int surface_style = 0; // 0 stone, 1 timber, 2 foliage, 3 roof, 4 metal
 uniform float detail_strength : hint_range(0.0, 1.0) = 0.82;
 
@@ -71,7 +72,11 @@ void fragment() {
 	}
 
 	float value = clamp(pattern * (0.94 + fine * 0.10) * detail_strength + (1.0 - detail_strength), 0.0, 1.15);
-	ALBEDO = base_color.rgb * value;
+	vec3 prop_color = base_color.rgb;
+	if (use_vertex_color) {
+		prop_color *= COLOR.rgb;
+	}
+	ALBEDO = prop_color * value;
 	ROUGHNESS = rough;
 	SPECULAR = surface_style == 4 ? 0.42 : 0.18;
 }
