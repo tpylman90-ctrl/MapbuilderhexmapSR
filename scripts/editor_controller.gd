@@ -274,7 +274,7 @@ func _build_editor_ui() -> void:
 	_make_button(map_page, "Generate Highlands", func(): _confirm_generation("highlands"))
 	_make_button(map_page, "Generate Kingdom", func(): _confirm_generation("kingdom"))
 	_make_button(map_page, "Generate Ashenreach", func(): _confirm_generation("ashenreach"))
-	_make_button(map_page, "New Blank Map… func(): _new_map_dialog.popup_centered())
+	_make_button(map_page, "New Blank Map…", func(): _new_map_dialog.popup_centered())
 
 	_add_section_title(map_page, "SURFACE MATERIALS")
 	var surface_label := Label.new()
